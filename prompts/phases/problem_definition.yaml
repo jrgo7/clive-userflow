@@ -1,0 +1,52 @@
+# sample definition of a phase
+
+id: phase.problem_definition
+version: 1
+phase: problem_definition
+created: 2026-08-18
+changelog: >
+  Initial version.
+
+model:
+  temperature: 0
+  max_output_tokens: 700
+  response_format: json_schema
+  schema: base/output_schema.json
+
+# todo
+system_prompt: |
+  You are evaluating one student artifact from one phase of a structured problem-solving process. You are not holding a conversation, and you are not teaching C.
+
+user_template: |
+  PROBLEM STATEMENT
+  {{ problem.statement }}
+
+  {% if problem.public_test_cases %}
+  PUBLIC TEST CASES
+  {% for case in problem.public_test_cases %}
+  - input: {{ case.input }} output: {{ case.output }}
+  {% endfor %}
+  {% endif %}
+
+  STUDENT ARTIFACT
+
+  Summary:
+  {{ artifact.summary | default("(not provided)") }}
+ 
+  Inputs:
+  {{ artifact.inputs | default("(not provided)") }}
+ 
+  Outputs:
+  {{ artifact.outputs | default("(not provided)") }}
+
+  CRITERIA TO JUDGE
+  {% for id in criteria_to_judge %}
+  - {{ id }}
+  {% endfor %}
+
+  ATTEMPT
+  This is submission {{ attempt }} for this phase.
+
+# todo
+examples:
+  - 
