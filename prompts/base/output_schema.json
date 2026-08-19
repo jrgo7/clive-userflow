@@ -1,1 +1,39 @@
-// TODO
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JudgeResult",
+  "description": "One PASS/FAIL verdict per criterion the judge was asked to evaluate. Mirrors the JudgeResult pydantic model used with client.messages.parse().",
+  "type": "object",
+  "properties": {
+    "verdicts": {
+      "type": "array",
+      "description": "Exactly one entry per criterion id supplied under CRITERIA TO JUDGE, in the same order.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "criterion_id": {
+            "type": "string",
+            "description": "The id of the criterion being judged, copied verbatim from the bracketed id in CRITERIA TO JUDGE."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": ["PASS", "FAIL"],
+            "description": "Whether the student artifact satisfies this criterion."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "A verbatim span copied from the student artifact that justifies the verdict. Empty string when nothing in the artifact bears on the criterion."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "How clearly the artifact settles this criterion. Use low for ambiguous or borderline calls."
+          }
+        },
+        "required": ["criterion_id", "verdict", "evidence", "confidence"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["verdicts"],
+  "additionalProperties": false
+}

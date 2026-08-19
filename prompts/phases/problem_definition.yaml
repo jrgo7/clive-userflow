@@ -1,21 +1,37 @@
 # sample definition of a phase
 
 id: phase.problem_definition
-version: 1
+version: 2
 phase: problem_definition
 created: 2026-08-18
 changelog: >
-  Initial version.
+  v2: Removed `temperature` (rejected with HTTP 400 on claude-sonnet-5 and every
+  other current model); depth is now controlled by `effort` + adaptive thinking.
+  Raised max_output_tokens, since thinking tokens count against the same budget.
+  The CRITERIA TO JUDGE loop now emits each criterion's text and guidance rather
+  than its bare id. Expanded the system prompt into an explicit judging contract.
 
 model:
-  temperature: 0
-  max_output_tokens: 700
+  # No `temperature` — sampling params were removed on Sonnet 5 / Opus 5 / 4.7 / 4.8
+  # and return a 400. Use `effort` to trade depth against cost instead.
+  effort: medium
+  thinking: adaptive
+  max_output_tokens: 4000
   response_format: json_schema
   schema: base/output_schema.json
 
-# todo
 system_prompt: |
   You are evaluating one student artifact from one phase of a structured problem-solving process. You are not holding a conversation, and you are not teaching C.
+
+  You judge the artifact against a fixed list of criteria. For each criterion you return exactly one verdict.
+
+  Rules:
+  - Return exactly one verdict per criterion id listed under CRITERIA TO JUDGE. Never merge, skip, split, or invent a criterion id.
+  - Judge each criterion only against its own stated text and guidance. A strong artifact can still fail one criterion; do not let a verdict on one criterion pull the others with it.
+  - Judge only what the artifact actually says. Do not credit the student for something a competent reader would infer but the artifact does not state.
+  - Quote evidence verbatim from the student artifact — copy the exact span, do not paraphrase, correct, or reformat it. If nothing in the artifact bears on the criterion, return an empty evidence string and FAIL.
+  - The problem statement and public test cases are context for judging. Never quote them as evidence; evidence must come from the student artifact.
+  - Set confidence to reflect how clearly the artifact settles the criterion, not how confident you are in general. Use "low" when the artifact is ambiguous or the criterion is a borderline call.
 
 user_template: |
   PROBLEM STATEMENT
@@ -24,7 +40,7 @@ user_template: |
   {% if problem.public_test_cases %}
   PUBLIC TEST CASES
   {% for case in problem.public_test_cases %}
-  - input: {{ case.input }} output: {{ case.output }}
+  - input: {{ case.input | tojson }} output: {{ case.output | tojson }}
   {% endfor %}
   {% endif %}
 
@@ -40,8 +56,10 @@ user_template: |
   {{ artifact.outputs | default("(not provided)") }}
 
   CRITERIA TO JUDGE
-  {% for id in criteria_to_judge %}
-  - {{ id }}
+  Return exactly one verdict for each of the following {{ criteria_to_judge | length }} criteria, using the id in brackets.
+  {% for c in criteria_to_judge %}
+  - [{{ c.id }}] {{ c.text }}
+    {{ c.guidance }}
   {% endfor %}
 
   ATTEMPT
@@ -49,4 +67,4 @@ user_template: |
 
 # todo
 examples:
-  - 
+  -

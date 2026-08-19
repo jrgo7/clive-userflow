@@ -1,0 +1,50 @@
+# Regression fixtures for phase.problem_definition.
+#
+# Each case pins the verdicts a correct judge should return for a given artifact.
+# `expect` lists only the criteria the case is designed to exercise; criteria not
+# listed are not asserted, so a case stays valid as the rubric grows.
+#
+# These are the three artifacts demonstrated in notebooks/00_overview.ipynb.
+
+suite: phase.problem_definition
+problem: problem.grade_average
+criteria_version: 1
+
+cases:
+  - id: good_artifact
+    why: Happy path. Own phrasing, declarable types, and a stated constraint.
+    artifact:
+      summary: >-
+        I need to work out the class's mean score. The program reads how many students
+        there are, then reads each student's mark, adds them up and divides by the count.
+      inputs: int n (the student count), then n floats, one score per student
+      outputs: "a single float: the mean of the n scores, printed to two decimal places"
+    expect:
+      novel_wording: PASS
+      concrete_types: PASS
+
+  - id: copied_artifact
+    why: >-
+      Summary is lifted almost verbatim from the statement, and the types are vague
+      placeholders. Guards against a judge that rubber-stamps anything well-formed.
+    artifact:
+      summary: >-
+        A teacher wants to know the average score of the students in a class.
+        Read an integer n, the number of students in the class. Then read n scores,
+        one per student, each a real number.
+      inputs: some numbers
+      outputs: the answer
+    expect:
+      novel_wording: FAIL
+      concrete_types: FAIL
+
+  - id: sparse_artifact
+    why: >-
+      Only a summary; inputs and outputs are absent entirely. Guards against the judge
+      inventing content for missing fields, and checks that unmentioned constraints fail
+      rather than being silently credited.
+    artifact:
+      summary: Add up everyone's marks and divide to get the class average.
+    expect:
+      constraints_noted: FAIL
+      concrete_types: FAIL

@@ -1,1 +1,22 @@
-# TODO: define a problem
+id: problem.grade_average
+title: Grade Average
+difficulty: introductory
+topics: [arrays, loops, floating-point]
+
+statement: |
+  A teacher wants to know the average score of the students in a class.
+
+  Read an integer n, the number of students in the class. Then read n scores, one per
+  student, each a real number. Compute and print the average of those n scores, rounded
+  to two decimal places.
+
+  You may assume there is at least one student, and that every score is between 0 and
+  100 inclusive.
+
+public_test_cases:
+  - input: "3\n90 80 70"
+    output: "80.00"
+  - input: "1\n55.5"
+    output: "55.50"
+  - input: "4\n100 0 100 0"
+    output: "50.00"
