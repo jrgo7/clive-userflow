@@ -1,0 +1,145 @@
+# Regression fixtures for phase.cases.
+#
+# Each case pins the verdicts a correct judge should return for a given artifact.
+# `expect` lists only the criteria the case is designed to exercise; criteria not
+# listed are not asserted, so a case stays valid as the rubric grows.
+#
+# `prior.problem_definition` is the artifact the same student submitted in the
+# previous phase. It is what `consistent_with_definition` is checked
+# against, and it is the only reason this suite carries a `prior` block at all.
+
+suite: phase.cases
+problem: problem.grade_average
+criteria_version: 1
+
+# The phase-1 artifact every case below is judged against, unless the case
+# overrides it. Lifted from the `good_artifact` fixture in the problem_definition
+# suite so the two suites tell one continuous story about one student.
+prior_default: &prior
+  problem_definition:
+    summary: >-
+      I need to work out the class's mean score. The program reads how many students
+      there are, then reads each student's mark, adds them up and divides by the count.
+    inputs: int n (the student count), then n floats, one score per student
+    outputs: "a single float: the mean of the n scores, printed to two decimal places"
+    constraints: n is at least 1, and every score is between 0 and 100 inclusive
+
+cases:
+  - id: good_cases
+    why: >-
+      Happy path. Three pairs with correct outputs, each carrying real intermediate
+      working, and the set includes both a minimum-size case and a boundary-value case.
+    prior: *prior
+    artifact:
+      cases:
+        - input: "3\n90 80 70"
+          output: "80.00"
+          trace: >-
+            n is 3. Running total starts at 0. Add 90 -> 90. Add 80 -> 170. Add 70 -> 240.
+            Divide 240 by 3 -> 80. Print with two decimals -> 80.00
+        - input: "1\n55.5"
+          output: "55.50"
+          trace: >-
+            n is 1, so the loop runs once. Total starts at 0, add 55.5 -> 55.5.
+            Divide 55.5 by 1 -> 55.5. Two decimals -> 55.50
+        - input: "4\n100 0 100 0"
+          output: "50.00"
+          trace: >-
+            n is 4. Total 0, add 100 -> 100, add 0 -> 100, add 100 -> 200, add 0 -> 200.
+            200 divided by 4 -> 50. Two decimals -> 50.00
+    expect:
+      pairs_correct: met
+      pairs_traced: met
+      edge_cases_present: met
+      consistent_with_definition: met
+
+  - id: untraced_cases
+    why: >-
+      Outputs are right, but each "trace" only restates the input and the answer with no
+      intermediate state. Guards against a judge that accepts the presence of a trace
+      field as evidence that tracing happened.
+    prior: *prior
+    artifact:
+      cases:
+        - input: "3\n90 80 70"
+          output: "80.00"
+          trace: "The average of 90, 80 and 70 is 80.00"
+        - input: "1\n55.5"
+          output: "55.50"
+          trace: "There is one score so the average is 55.50"
+    expect:
+      pairs_correct: met
+      pairs_traced: unmet
+
+  - id: wrong_output_case
+    why: >-
+      The second pair's stated output does not follow from its input. Guards against a
+      judge that checks only that a plausible-looking number is present.
+    prior: *prior
+    artifact:
+      cases:
+        - input: "3\n90 80 70"
+          output: "80.00"
+          trace: "90 + 80 + 70 = 240, and 240 / 3 = 80, printed as 80.00"
+        - input: "4\n10 20 30 40"
+          output: "30.00"
+          trace: "10 + 20 + 30 + 40 = 100, and 100 / 4 = 30, printed as 30.00"
+    expect:
+      pairs_correct: unmet
+      pairs_traced: met
+
+  - id: interior_only_cases
+    why: >-
+      Every case is an ordinary mid-range value: no minimum size, no boundary score,
+      nothing at an extreme. Guards against crediting quantity of cases as coverage.
+    prior: *prior
+    artifact:
+      cases:
+        - input: "3\n70 75 80"
+          output: "75.00"
+          trace: "70 + 75 + 80 = 225. 225 / 3 = 75. Printed as 75.00"
+        - input: "3\n60 65 70"
+          output: "65.00"
+          trace: "60 + 65 + 70 = 195. 195 / 3 = 65. Printed as 65.00"
+        - input: "4\n50 60 70 80"
+          output: "65.00"
+          trace: "50 + 60 + 70 + 80 = 260. 260 / 4 = 65. Printed as 65.00"
+    expect:
+      edge_cases_present: unmet
+      pairs_correct: met
+
+  - id: inconsistent_with_definition
+    why: >-
+      The pairs are internally fine and correctly traced, but a score of 250 violates the
+      0-to-100 range this student declared in Problem Definition. This is the cross-phase
+      check; a judge that reads the artifact in isolation will miss it.
+    prior: *prior
+    artifact:
+      cases:
+        - input: "2\n250 50"
+          output: "150.00"
+          trace: "250 + 50 = 300. 300 / 2 = 150. Printed as 150.00"
+        - input: "2\n80 90"
+          output: "85.00"
+          trace: "80 + 90 = 170. 170 / 2 = 85. Printed as 85.00"
+    expect:
+      consistent_with_definition: unmet
+      pairs_correct: met
+
+  - id: underspecified_rounding
+    why: >-
+      The average lands exactly on a half-way value at the second decimal place, and the
+      problem statement does not say which way such a value rounds. The student's answer
+      is defensible but not derivable from the statement, so the honest verdict is
+      `uncertain` rather than a coin-flip met/unmet.
+    prior: *prior
+    artifact:
+      cases:
+        - input: "2\n80.00 80.01"
+          output: "80.01"
+          trace: >-
+            80.00 + 80.01 = 160.01. 160.01 / 2 = 80.005. Rounding that to two decimal
+            places gives 80.01
+    expect:
+      pairs_correct: uncertain
+      pairs_traced: met

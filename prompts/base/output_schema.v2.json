@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JudgeResult",
+  "description": "One verdict per criterion the judge was asked to evaluate. Mirrors the JudgeResult pydantic model used with client.messages.parse(). There is deliberately no overall pass/fail field: the model returns per-criterion verdicts and aggregation decides advancement (FR-VER-05). Do not add one.",
+  "type": "object",
+  "properties": {
+    "verdicts": {
+      "type": "array",
+      "description": "Exactly one entry per criterion id supplied under CRITERIA TO JUDGE, in the same order.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "criterion_id": {
+            "type": "string",
+            "description": "The id of the criterion being judged, copied verbatim from the bracketed id in CRITERIA TO JUDGE."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": ["met", "unmet", "uncertain"],
+            "description": "met: the artifact satisfies the criterion. unmet: it does not, including saying nothing about it. uncertain: the artifact does not settle the question and both readings are defensible. uncertain blocks advancement just as unmet does, but is shown to the student as a question rather than a correction (FR-VER-01 to 03)."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "A verbatim span copied from the student artifact that justifies the verdict, quoted exactly as written and never translated. Empty string when nothing in the artifact bears on the criterion. Must never contain the missing content itself: name the gap, do not fill it (FR-EVA-05)."
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "How reliable this verdict is, which is separate from the verdict itself: a confidently-identified ambiguity is a high-confidence uncertain. Use low when the judge could readily have gone the other way."
+          }
+        },
+        "required": ["criterion_id", "verdict", "evidence", "confidence"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["verdicts"],
+  "additionalProperties": false
+}

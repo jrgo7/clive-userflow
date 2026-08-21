@@ -4,7 +4,7 @@
 # `expect` lists only the criteria the case is designed to exercise; criteria not
 # listed are not asserted, so a case stays valid as the rubric grows.
 #
-# These are the three artifacts demonstrated in notebooks/00_overview.ipynb.
+# The first three artifacts are the ones demonstrated in notebooks/00_overview.ipynb.
 
 suite: phase.problem_definition
 problem: problem.grade_average
@@ -19,9 +19,11 @@ cases:
         there are, then reads each student's mark, adds them up and divides by the count.
       inputs: int n (the student count), then n floats, one score per student
       outputs: "a single float: the mean of the n scores, printed to two decimal places"
+      constraints: n is at least 1, and every score is between 0 and 100 inclusive
     expect:
-      novel_wording: PASS
-      concrete_types: PASS
+      novel_wording: met
+      concrete_types: met
+      constraints_noted: met
 
   - id: copied_artifact
     why: >-
@@ -35,8 +37,8 @@ cases:
       inputs: some numbers
       outputs: the answer
     expect:
-      novel_wording: FAIL
-      concrete_types: FAIL
+      novel_wording: unmet
+      concrete_types: unmet
 
   - id: sparse_artifact
     why: >-
@@ -46,5 +48,23 @@ cases:
     artifact:
       summary: Add up everyone's marks and divide to get the class average.
     expect:
-      constraints_noted: FAIL
-      concrete_types: FAIL
+      constraints_noted: unmet
+      concrete_types: unmet
+
+  - id: borderline_paraphrase
+    why: >-
+      The summary reorders the statement and swaps a few words, but keeps its clause
+      structure. Whether that counts as the student's own phrasing is genuinely not
+      settled by the artifact, so the honest verdict is `uncertain` rather than a
+      coin-flip. This is the suite's `uncertain` fixture; without one, the judge learns
+      the third verdict value exists but never that it is usable.
+    artifact:
+      summary: >-
+        The class average is what a teacher wants to know. An integer n is read, being
+        how many students there are in the class, and then n scores get read, one for
+        each student, every one of them a real number.
+      inputs: int n, then n float scores
+      outputs: one float, the average, to two decimal places
+    expect:
+      novel_wording: uncertain
+      concrete_types: met

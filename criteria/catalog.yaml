@@ -1,0 +1,221 @@
+# CLive criterion catalog.
+#
+# This file is the authority for criterion text. It supersedes Table 4.2 of the
+# THS-ST1 manuscript. Prompts quote `text` and `guidance` from here verbatim rather
+# than paraphrasing them; paraphrase is how the catalog and the prompts drift apart.
+#
+# This file is durable. It migrates into the SvelteKit product and into the paper,
+# so it stays language-neutral: no Python, no Jinja, no provider or model names.
+#
+# Fields
+#   id          Stable identifier. This is the `criterion_id` the judge echoes back
+#               in every verdict, so it must never be reused or renamed in place.
+#   phase       Which of the four phases the criterion belongs to.
+#   text        The rule, as the student sees it. One sentence.
+#   guidance    How a judge decides. Written against the three verdict values, and
+#               always says what `uncertain` looks like -- a criterion whose guidance
+#               offers no route to `uncertain` will never receive one.
+#   gate        `gating` blocks advancement when not met; `advisory` is reported to
+#               the student but never blocks. Note that `uncertain` blocks the gate
+#               for gating criteria: it is not a soft pass. (FR-VER-01 to 03)
+#   method      `model` -- decided by the judge call.
+#               `deterministic` -- decided in code; the code result is authoritative
+#               and no model call is made for it. (FR-EVA-03)
+#
+# NOTE (open): the SRS uses a `C-` prefix for criterion requirement IDs. The mapping
+# from these ids to those numbers is not recorded here because it has not been
+# confirmed against the SRS; `id` is the canonical key everywhere in the code.
+
+version: 1
+updated: 2026-08-21
+
+criteria:
+
+  # ---- Phase 1: Problem Definition ------------------------------------------
+  # Task, as the student sees it: state the problem in one sentence in your own
+  # words; list each input with type and representation; list each output with type
+  # and representation; note any conditions or constraints the prompt implies.
+
+  - id: novel_wording
+    phase: problem_definition
+    text: The summary uses different words than the prompt.
+    guidance: >-
+      `met` if the summary restates the task in the student's own phrasing.
+      `unmet` if it is largely copied spans from the problem statement, even when
+      reordered. Domain nouns that have no natural synonym (variable names, "array",
+      "average") do not count as copying.
+      `uncertain` if the summary reorders and lightly reworks the statement but keeps
+      its clause structure, so that own-words and copied are both defensible readings.
+    gate: gating
+    method: model
+
+  - id: concrete_types
+    phase: problem_definition
+    text: Types must be specific and concrete.
+    guidance: >-
+      `met` if each input and output names a definite type a C programmer could
+      declare -- "int", "float", "array of 10 ints", "null-terminated string".
+      `unmet` for vague placeholders such as "a number", "some values", "the data", or
+      a quantity given with no type at all.
+      `uncertain` if a type is named but its representation is left genuinely open by
+      the artifact and the problem statement does not settle it either.
+    gate: gating
+    method: model
+
+  - id: constraints_noted
+    phase: problem_definition
+    text: Some constraints must be noted, or explicitly described as absent.
+    guidance: >-
+      `met` if the artifact states at least one real constraint (value ranges, input
+      size, sign, precision, ordering) OR explicitly says the problem states no
+      constraints.
+      `unmet` if constraints are simply never mentioned -- silence is not the same as
+      declaring there are none.
+      `uncertain` if the artifact gestures at a limit without stating one, so that it
+      is unclear whether a constraint was identified or merely alluded to.
+    gate: gating
+    method: model
+
+  # ---- Phase 2: Cases -------------------------------------------------------
+  # Task, as the student sees it: write N inputs; write the expected output for each
+  # one; write the steps by hand that get from that input to that output.
+
+  - id: pairs_correct
+    phase: cases
+    text: Each input/output pair is correct.
+    guidance: >-
+      `met` if, for every pair, the stated output is what the problem statement
+      requires for the stated input.
+      `unmet` if any pair's output contradicts the statement.
+      `uncertain` if the statement does not determine the output for some input --
+      an unspecified tie-break, an undefined ordering, a rounding rule the statement
+      never fixes. Decide this by reasoning from the problem statement alone.
+    gate: gating
+    # NOTE (open): this is the natural first candidate for a deterministic check --
+    # run a reference solution on the student's input and compare. It stays `model`
+    # until such a runner exists. Whichever way it is decided, a reference solution
+    # may be EXECUTED but must never appear in a model call. (IR-SW-02, FR-EVA-06)
+    method: model
+
+  - id: pairs_traced
+    phase: cases
+    text: Each input/output pair has a trace.
+    guidance: >-
+      `met` if every pair is accompanied by the intermediate working that gets from
+      the input to the output -- running values, the state after each step.
+      `unmet` if a trace is missing for any pair, or if what is offered as a trace
+      only restates the input and the answer with nothing in between.
+      `uncertain` if working is shown for some steps but skips the step that does the
+      actual work, so it is unclear whether the student traced it or assumed it.
+      Judge whether the working is shown, not whether it reaches the right answer --
+      wrong arithmetic shown in full is a trace, and `pairs_correct` is where its
+      wrongness is recorded.
+    gate: gating
+    method: model
+
+  - id: edge_cases_present
+    phase: cases
+    text: Some edge cases are included.
+    guidance: >-
+      `met` if at least one case probes a boundary or unusual condition the problem
+      statement implies -- the smallest or largest permitted input, a boundary value,
+      a tie, a single element, a zero.
+      `unmet` if every case is an ordinary interior value. A large number of ordinary
+      cases is still no edge case.
+      `uncertain` if a case sits near a boundary without being at it, so whether it
+      was chosen to probe an edge cannot be told from the artifact.
+    gate: gating
+    method: model
+
+  - id: consistent_with_definition
+    phase: cases
+    text: >-
+      The cases are consistent with the inputs, outputs, and constraints stated in
+      Problem Definition.
+    guidance: >-
+      `met` if every case respects the types, ranges, and output format the student
+      declared in the previous phase.
+      `unmet` if a case violates a constraint the student themselves declared, or uses
+      an input or output shape that contradicts their own definition.
+      `uncertain` if the Problem Definition artifact is too vague to check against --
+      the fault is the earlier artifact's, so do not charge it to these cases.
+      Judge against what the student declared, not against what the problem statement
+      says: a case consistent with a wrong definition is still consistent.
+    gate: gating
+    method: model
+
+  # ---- Phase 3: Design of the Algorithm -------------------------------------
+  # Task, as the student sees it: write a generalized list of steps as a numbered
+  # sequence.
+
+  - id: human_executable
+    phase: design_of_algorithm
+    text: The steps are executable by a human.
+    guidance: >-
+      `met` if a person could follow the steps on paper, in order, and reach the
+      output without having to guess what a step means.
+      `unmet` if a step is a vague directive that names the goal instead of the action
+      -- "compute the answer", "process the data", "handle the input".
+      `uncertain` if a step admits two different readings that lead to different
+      results and the artifact never settles which was meant.
+    gate: gating
+    method: model
+
+  - id: granular_steps
+    phase: design_of_algorithm
+    text: The steps are relatively granular.
+    guidance: >-
+      `met` if the sequence decomposes the work into individual actions rather than
+      lumping it into one or two steps.
+      `unmet` if a single step hides the core of the problem -- the step that, if
+      removed, would leave nothing of the algorithm behind.
+      `uncertain` if the granularity is uneven, with the main work broken down but
+      some sizeable part still folded into one step.
+      "Relatively" is deliberate: this criterion is advisory. Being coarse is worth
+      telling the student about, but it does not on its own block advancement.
+    gate: advisory
+    method: model
+
+  - id: covers_every_case
+    phase: design_of_algorithm
+    text: The steps cover every case.
+    guidance: >-
+      `met` if following the steps produces the right behaviour for every case the
+      student listed in the Cases phase, including the edge cases among them.
+      `unmet` if some case would fall through, loop the wrong number of times, or hit
+      a step that does not apply to it -- most often a boundary the student wrote in
+      the previous phase and then designed past.
+      `uncertain` if a case's behaviour depends on a step whose meaning is not settled.
+      Trace the student's own cases through the student's own steps.
+    gate: gating
+    method: model
+
+  - id: language_agnostic
+    phase: design_of_algorithm
+    text: The steps are language agnostic.
+    guidance: >-
+      `met` if the steps are stated without C syntax or language-specific constructs.
+      Naming a variable, describing a repetition, or saying a value is a whole number
+      is all fine.
+      `unmet` if steps are C statements, or C statements lightly disguised -- calls
+      like printf or scanf, a three-part for header, type declarations written as code,
+      semicolons and braces carrying the structure.
+      `uncertain` if a step borrows one piece of notation from a language but is
+      otherwise prose, so whether the student is designing or transcribing is unclear.
+    gate: gating
+    method: model
+
+  - id: generalises_cases
+    phase: design_of_algorithm
+    text: The steps are a generalisation of the cases in the Cases phase.
+    guidance: >-
+      `met` if the steps describe a procedure for an arbitrary permitted input rather
+      than a replay of the particular cases the student wrote.
+      `unmet` if the steps hard-code values drawn from those cases -- dividing by 3
+      because one case had three students, reading a fixed number of inputs, naming
+      specific case values.
+      `uncertain` if a constant appears that is fixed by the problem statement for
+      every input, so it cannot be told from the artifact whether the student took it
+      from the statement or from one of their cases.
+    gate: gating
+    method: model
