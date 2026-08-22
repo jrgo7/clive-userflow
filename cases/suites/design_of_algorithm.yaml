@@ -1,0 +1,136 @@
+# Regression fixtures for phase.design_of_algorithm.
+#
+# Each case pins the verdicts a correct judge should return for a given artifact.
+# `expect` lists only the criteria the case is designed to exercise; criteria not
+# listed are not asserted, so a case stays valid as the rubric grows.
+#
+# `prior.cases` is what `covers_every_case` and `generalises_cases`
+# are checked against. An algorithm can only be judged for coverage against the cases
+# the student actually wrote, so this suite carries both earlier artifacts.
+
+suite: phase.design_of_algorithm
+problem: problem.grade_average
+criteria_version: 1
+
+prior_default: &prior
+  problem_definition:
+    summary: >-
+      I need to work out the class's mean score. The program reads how many students
+      there are, then reads each student's mark, adds them up and divides by the count.
+    inputs: int n (the student count), then n floats, one score per student
+    outputs: "a single float: the mean of the n scores, printed to two decimal places"
+    constraints: n is at least 1, and every score is between 0 and 100 inclusive
+  cases:
+    - input: "3\n90 80 70"
+      output: "80.00"
+      trace: "Total 0 -> 90 -> 170 -> 240. 240 / 3 = 80. Printed as 80.00"
+    - input: "1\n55.5"
+      output: "55.50"
+      trace: "Loop runs once. Total 0 -> 55.5. 55.5 / 1 = 55.5. Printed as 55.50"
+    - input: "4\n100 0 100 0"
+      output: "50.00"
+      trace: "Total 0 -> 100 -> 100 -> 200 -> 200. 200 / 4 = 50. Printed as 50.00"
+
+cases:
+  - id: good_algorithm
+    why: >-
+      Happy path. A numbered, general procedure a person could run on paper, with no
+      language-specific constructs and no values carried over from a particular case.
+    prior: *prior
+    artifact:
+      steps:
+        - Read the student count and call it n.
+        - Set a running total to 0.
+        - Repeat the next two steps n times, once for each student.
+        - Read the next score.
+        - Add that score to the running total.
+        - Divide the running total by n to get the average.
+        - Write the average with exactly two digits after the decimal point.
+    expect:
+      human_executable: met
+      granular_steps: met
+      covers_every_case: met
+      language_agnostic: met
+      generalises_cases: met
+
+  - id: c_code_algorithm
+    why: >-
+      The steps are C statements with the numbering bolted on. Guards against a judge
+      that treats syntactic precision as a virtue in a phase that exists to precede code.
+    prior: *prior
+    artifact:
+      steps:
+        - "scanf(\"%d\", &n);"
+        - "float total = 0.0;"
+        - "for (int i = 0; i < n; i++) { scanf(\"%f\", &score); total += score; }"
+        - "printf(\"%.2f\", total / n);"
+    expect:
+      language_agnostic: unmet
+      human_executable: met
+
+  - id: hardcoded_algorithm
+    why: >-
+      Divides by 3 because the student's first case had three students. The procedure
+      replays one case instead of generalising it, which is the whole point of the phase.
+    prior: *prior
+    artifact:
+      steps:
+        - Read the three scores.
+        - Add the first score to the second score.
+        - Add the third score to that total.
+        - Divide the total by 3.
+        - Write the result with two decimal places.
+    expect:
+      generalises_cases: unmet
+      covers_every_case: unmet
+
+  - id: coarse_algorithm
+    why: >-
+      Three steps, the middle one hiding the entire problem. Guards against a judge that
+      accepts a numbered list as a design regardless of what the numbers contain.
+    prior: *prior
+    artifact:
+      steps:
+        - Read the input.
+        - Compute the average of the scores.
+        - Print the answer.
+    expect:
+      granular_steps: unmet
+      human_executable: unmet
+
+  - id: misses_minimum_case
+    why: >-
+      The algorithm reads one score before the loop and then loops for the rest, which
+      silently assumes at least two students and breaks on the n=1 case this same student
+      wrote in the Cases phase. Cross-phase coverage check.
+    prior: *prior
+    artifact:
+      steps:
+        - Read the student count and call it n.
+        - Read the first score and make it the running total.
+        - Repeat the next two steps until you have read n more scores.
+        - Read the next score.
+        - Add it to the running total.
+        - Divide the running total by n.
+        - Write the result with two decimal places.
+    expect:
+      covers_every_case: unmet
+      language_agnostic: met
+
+  - id: ambiguous_step
+    why: >-
+      Step four could mean at least two different things and the artifact never settles
+      which. A judge should say it cannot tell rather than guessing charitably (met) or
+      punitively (unmet). This is the suite's `uncertain` fixture.
+    prior: *prior
+    artifact:
+      steps:
+        - Read the student count and call it n.
+        - Set a running total to 0.
+        - For each student, read their score and add it to the running total.
+        - Adjust the total as needed before dividing.
+        - Divide the running total by n.
+        - Write the result with two decimal places.
+    expect:
+      human_executable: uncertain
+      language_agnostic: met
