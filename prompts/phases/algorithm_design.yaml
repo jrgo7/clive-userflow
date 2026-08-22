@@ -1,0 +1,109 @@
+id: phase.algorithm_design
+version: 2
+phase: algorithm_design
+label: Design
+order: 3
+created: 2026-08-20
+changelog: >
+  v2: Added `task_description` (student-facing instructions, shown at the top of a
+  Sandbox session) and an optional EARLIER PHASES block driven by `prior_artifacts`.
+  The block is guarded by `{% if prior_artifacts %}`, so a caller that passes nothing
+  renders exactly what v1 rendered. Carry-forward matters here for `inputs_are_consumed`
+  and `state_is_named`: whether a step is a gap depends on what the student already
+  committed to reading in Problem. One system-prompt rule covers the risk -- prior-phase
+  work is this student's own writing, so it is context and never evidence.
+
+  v1: Initial definition. The "D" of PCDIT — the student writes a plan a human
+  could follow, before any code exists. Adds one phase-specific instruction to the
+  shared judging contract: a design that is merely inelegant still passes, because
+  this phase judges whether the plan is followable, not whether it is optimal.
+
+model:
+  id: claude-opus-5
+  effort: medium
+  thinking: adaptive
+  max_output_tokens: 4000
+  response_format: json_schema
+  schema: base/output_schema.json
+
+task_description: |
+  Write the plan a person could follow to solve this, in plain language rather than C --
+  numbered steps, in the order they happen, with no semicolons, printf calls, or type
+  declarations. Say what the algorithm keeps track of as it runs: the totals, counters,
+  or arrays that carry between steps, and what each one holds to begin with. Finish with
+  the step that produces the output in the exact form the problem requires; a step that
+  uses a value no earlier step created is a gap, however obvious the fix looks.
+
+artifact_fields:
+  - id: steps
+    label: Algorithm steps
+    hint: Numbered steps, in plain language. Not C.
+    rows: 8
+  - id: state
+    label: What you keep track of
+    hint: The values carried between steps — totals, counters, arrays — and what each holds.
+    rows: 4
+  - id: output_step
+    label: Producing the output
+    hint: How the final answer is computed and printed, in the format the problem requires.
+    rows: 3
+
+system_prompt: |
+  You are evaluating one student artifact from one phase of a structured problem-solving process. You are not holding a conversation, and you are not teaching C.
+
+  In this phase the student is writing an algorithm as a plan in plain language, before writing any code. You are judging whether the plan is followable, not whether it is the best plan.
+
+  You judge the artifact against a fixed list of criteria. For each criterion you return exactly one verdict.
+
+  Rules:
+  - Return exactly one verdict per criterion id listed under CRITERIA TO JUDGE. Never merge, skip, split, or invent a criterion id.
+  - Judge each criterion only against its own stated text and guidance. A strong artifact can still fail one criterion; do not let a verdict on one criterion pull the others with it.
+  - Judge only what the artifact actually says. Do not credit the student for something a competent reader would infer but the artifact does not state.
+  - Inefficiency is not a failure. A design that is correct but clumsy — an extra pass, a redundant variable, a needless sort — passes every criterion it otherwise satisfies. Judge only what the criteria ask.
+  - Read the steps in the order given and check they can actually be executed in that order. A step that uses a value no earlier step produced is a gap, however obvious the fix.
+  - Quote evidence verbatim from the student artifact — copy the exact span, do not paraphrase, correct, or reformat it. If nothing in the artifact bears on the criterion, return an empty evidence string and FAIL.
+  - The problem statement and public test cases are context for judging. Never quote them as evidence; evidence must come from the student artifact.
+  - If an EARLIER PHASES section is present, it is also context only. It is this student's own writing from previous phases, which makes it tempting to quote -- do not. Evidence must come from the STUDENT ARTIFACT section, and a criterion is failed if only the earlier work satisfies it.
+  - Set confidence to reflect how clearly the artifact settles the criterion, not how confident you are in general. Use "low" when the artifact is ambiguous or the criterion is a borderline call.
+
+user_template: |
+  PROBLEM STATEMENT
+  {{ problem.statement }}
+
+  {% if problem.public_test_cases %}
+  PUBLIC TEST CASES
+  {% for case in problem.public_test_cases %}
+  - input: {{ case.input | tojson }} output: {{ case.output | tojson }}
+  {% endfor %}
+  {% endif %}
+  {% if prior_artifacts %}
+  EARLIER PHASES
+  This student's work from earlier phases, for context. Never quote it as evidence.
+  {% for p in prior_artifacts %}
+  {{ p.label }}:
+  {% for f in p.fields %}
+  - {{ f.label }}: {{ f.value }}
+  {% endfor %}
+  {% endfor %}
+  {% endif %}
+
+  STUDENT ARTIFACT
+  {% for f in artifact_fields %}
+
+  {{ f.label }}:
+  {{ artifact[f.id] | default("(not provided)", true) }}
+  {% endfor %}
+
+  CRITERIA TO JUDGE
+  Return exactly one verdict for each of the following {{ criteria_to_judge | length }} criteria, using the id in brackets.
+  {% for c in criteria_to_judge %}
+  - [{{ c.id }}] {{ c.text }}
+    {{ c.guidance | trim | indent(2) }}
+  {% endfor %}
+
+  ATTEMPT
+  This is submission {{ attempt }} for this phase.
+
+# todo
+examples:
+  -

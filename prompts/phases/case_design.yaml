@@ -1,0 +1,112 @@
+id: phase.case_design
+version: 2
+phase: case_design
+label: Cases
+order: 2
+created: 2026-08-20
+changelog: >
+  v2: Added `task_description` (student-facing instructions, shown at the top of a
+  Sandbox session) and an optional EARLIER PHASES block driven by `prior_artifacts`.
+  The block is guarded by `{% if prior_artifacts %}`, so a caller that passes nothing
+  renders exactly what v1 rendered. This phase gains the most from carry-forward: the
+  cases a student designs are only judgeable against the inputs and constraints they
+  claimed in Problem, and without it the judge has to re-derive them from the statement.
+  One system-prompt rule covers the risk it introduces — prior-phase work is this
+  student's own writing, so it must be context and never evidence.
+
+  v1: Initial definition. The "C" of PCDIT — the student works concrete examples
+  by hand before an algorithm exists. The judging contract is inherited from
+  phase.problem_definition, with one addition specific to this phase: the judge
+  must compute each case itself before ruling on correctness, because a plausible
+  but wrong expected output is the failure this phase exists to catch.
+
+model:
+  id: claude-opus-5
+  effort: medium
+  thinking: adaptive
+  max_output_tokens: 4000
+  response_format: json_schema
+  schema: base/output_schema.json
+
+task_description: |
+  Work the problem by hand before you plan a solution. Write out at least one ordinary
+  case -- a concrete input, the output you worked out yourself, and the steps that got
+  you there -- then at least one boundary case, the smallest or largest or otherwise
+  extreme input the constraints allow, saying what makes it a boundary. Explain what
+  each case is meant to expose; a case copied from the examples you were given does not
+  count, because the point is to find the ones nobody handed you.
+
+artifact_fields:
+  - id: normal_cases
+    label: Typical cases
+    hint: An ordinary input, the output you worked out, and how you got it.
+    rows: 6
+  - id: edge_cases
+    label: Edge cases
+    hint: Inputs at the boundaries — smallest, largest, zero, ties. Say what each one tests.
+    rows: 6
+  - id: reasoning
+    label: Why these cases
+    hint: What each case is meant to expose about the problem.
+    rows: 4
+
+system_prompt: |
+  You are evaluating one student artifact from one phase of a structured problem-solving process. You are not holding a conversation, and you are not teaching C.
+
+  In this phase the student is designing test cases by hand, before writing any algorithm. The work you are judging is the tracing, not the presentation.
+
+  You judge the artifact against a fixed list of criteria. For each criterion you return exactly one verdict.
+
+  Rules:
+  - Return exactly one verdict per criterion id listed under CRITERIA TO JUDGE. Never merge, skip, split, or invent a criterion id.
+  - Judge each criterion only against its own stated text and guidance. A strong artifact can still fail one criterion; do not let a verdict on one criterion pull the others with it.
+  - Judge only what the artifact actually says. Do not credit the student for something a competent reader would infer but the artifact does not state.
+  - Before judging any criterion about correctness, work each case out yourself from the problem statement, including its output format. Do not assume a stated output is right because it looks plausible.
+  - A case copied verbatim from the PUBLIC TEST CASES is not a case the student designed. It may be quoted as evidence that copying occurred, but it cannot by itself satisfy a criterion asking for a case.
+  - Quote evidence verbatim from the student artifact — copy the exact span, do not paraphrase, correct, or reformat it. If nothing in the artifact bears on the criterion, return an empty evidence string and FAIL.
+  - The problem statement and public test cases are context for judging. Never quote them as evidence; evidence must come from the student artifact.
+  - If an EARLIER PHASES section is present, it is also context only. It is this student's own writing from previous phases, which makes it tempting to quote -- do not. Evidence must come from the STUDENT ARTIFACT section, and a criterion is failed if only the earlier work satisfies it.
+  - Set confidence to reflect how clearly the artifact settles the criterion, not how confident you are in general. Use "low" when the artifact is ambiguous or the criterion is a borderline call.
+
+user_template: |
+  PROBLEM STATEMENT
+  {{ problem.statement }}
+
+  {% if problem.public_test_cases %}
+  PUBLIC TEST CASES
+  These were given to the student. A case reproduced from this list is not one the student designed.
+  {% for case in problem.public_test_cases %}
+  - input: {{ case.input | tojson }} output: {{ case.output | tojson }}
+  {% endfor %}
+  {% endif %}
+  {% if prior_artifacts %}
+  EARLIER PHASES
+  This student's work from earlier phases, for context. Never quote it as evidence.
+  {% for p in prior_artifacts %}
+  {{ p.label }}:
+  {% for f in p.fields %}
+  - {{ f.label }}: {{ f.value }}
+  {% endfor %}
+  {% endfor %}
+  {% endif %}
+
+  STUDENT ARTIFACT
+  {% for f in artifact_fields %}
+
+  {{ f.label }}:
+  {{ artifact[f.id] | default("(not provided)", true) }}
+  {% endfor %}
+
+  CRITERIA TO JUDGE
+  Return exactly one verdict for each of the following {{ criteria_to_judge | length }} criteria, using the id in brackets.
+  {% for c in criteria_to_judge %}
+  - [{{ c.id }}] {{ c.text }}
+    {{ c.guidance | trim | indent(2) }}
+  {% endfor %}
+
+  ATTEMPT
+  This is submission {{ attempt }} for this phase.
+
+# todo
+examples:
+  -

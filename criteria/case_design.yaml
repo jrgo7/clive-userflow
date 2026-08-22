@@ -1,0 +1,46 @@
+# Criteria for phase.case_design (the "C" of PCDIT).
+#
+# The student is working concrete examples BY HAND, before any algorithm exists.
+# The point of this phase is that tracing a case yourself is what exposes the
+# rule you are about to encode -- so these criteria reward shown work, not
+# well-formatted input/output tables.
+
+id: criteria.case_design
+phase: case_design
+version: 1
+
+criteria:
+  - id: has_normal_case
+    text: At least one typical case is given with a concrete input and a concrete expected output.
+    guidance: |
+      PASS if the artifact contains at least one case where both the input and the
+      expected output are literal values a program could actually be run against.
+      FAIL if cases are described only in the abstract ('a list of scores'), if the
+      expected output is missing, or if every case is copied verbatim from the public
+      test cases in the problem statement -- restating the given examples is not
+      designing a case.
+
+  - id: has_edge_case
+    text: At least one edge or boundary case is given, and is identified as such.
+    guidance: |
+      PASS if the artifact includes a case at a boundary of the stated constraints --
+      the smallest legal input, the largest, a zero, a tie, an empty collection, the
+      minimum or maximum allowed value -- and says what makes it an edge case.
+      FAIL if every case is an unremarkable middle-of-the-range example, or if a
+      boundary value appears but the artifact never signals that it is a boundary.
+
+  - id: work_is_shown
+    text: The expected output is derived, not merely asserted.
+    guidance: |
+      PASS if at least one case shows the intermediate work that produces the output --
+      a running total, a comparison, a per-step trace, an arithmetic expression.
+      FAIL if the artifact is only a table of inputs paired with outputs. A single
+      restated formula with no values substituted into it does not count as a trace.
+
+  - id: outputs_are_correct
+    text: Every stated expected output is actually correct for its stated input.
+    guidance: |
+      Compute each case yourself against the problem statement before judging.
+      PASS only if every expected output the artifact states is right, including its
+      format (decimal places, rounding, units, casing) where the statement fixes one.
+      FAIL if any case is wrong, and quote the wrong case as evidence.

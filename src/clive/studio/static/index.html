@@ -1,0 +1,1504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLive Studio</title>
+<style>
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #f0f2f5;
+  --line: #d9dee5;
+  --ink: #16191d;
+  --ink-2: #5c6673;
+  --accent: #3355cc;
+  --accent-ink: #ffffff;
+  --pass: #1a7f4b;
+  --pass-bg: #e4f4ea;
+  --fail: #b3261e;
+  --fail-bg: #fbe7e6;
+  --warn: #8a5a00;
+  --warn-bg: #fdf1dc;
+  --mono: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c;
+    --panel: #1c2027;
+    --panel-2: #23282f;
+    --line: #333a44;
+    --ink: #e6e9ee;
+    --ink-2: #97a1af;
+    --accent: #7d9bff;
+    --accent-ink: #10131a;
+    --pass: #6ddc9b;
+    --pass-bg: #14301f;
+    --fail: #ff9a92;
+    --fail-bg: #331a19;
+    --warn: #f0c274;
+    --warn-bg: #33280f;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.5 var(--sans);
+}
+header {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 10px 18px; background: var(--panel); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 5;
+}
+.brand { font-weight: 650; letter-spacing: .2px; }
+.brand span { color: var(--ink-2); font-weight: 400; }
+.spacer { flex: 1; }
+.pill {
+  font-size: 12px; padding: 3px 9px; border-radius: 999px;
+  background: var(--panel-2); color: var(--ink-2); border: 1px solid var(--line);
+}
+.pill.bad { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+
+nav.phases { display: flex; gap: 6px; }
+nav.phases button {
+  font: inherit; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--ink-2);
+}
+nav.phases button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+nav.tabs {
+  display: flex; gap: 2px; padding: 0 18px; background: var(--panel);
+  border-bottom: 1px solid var(--line); position: sticky; top: 51px; z-index: 4;
+}
+nav.tabs button {
+  font: inherit; padding: 9px 14px; cursor: pointer; color: var(--ink-2);
+  background: none; border: none; border-bottom: 2px solid transparent;
+}
+nav.tabs button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+
+main { max-width: 1060px; margin: 0 auto; padding: 20px 18px 80px; }
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;
+}
+.card h3 { margin: 0 0 4px; font-size: 14px; }
+.card .sub { color: var(--ink-2); font-size: 12.5px; margin: 0 0 12px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.row > .f { flex: 1 1 180px; }
+label { display: block; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+input, select, textarea {
+  font: inherit; width: 100%; padding: 7px 9px; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+}
+textarea { resize: vertical; min-height: 60px; }
+textarea.mono, input.mono, pre { font-family: var(--mono); font-size: 12.5px; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+button.act {
+  font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+}
+button.ghost { border: 1px solid var(--line); background: transparent; color: var(--ink); font-weight: 500; }
+button.danger { border-color: transparent; background: var(--fail-bg); color: var(--fail); }
+button.act:disabled { opacity: .45; cursor: not-allowed; }
+button.mini {
+  font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2);
+}
+
+.item { border: 1px solid var(--line); border-radius: 9px; padding: 12px; margin-bottom: 10px; background: var(--panel-2); }
+.item .head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.item .head .grip { color: var(--ink-2); font-size: 12px; min-width: 22px; }
+
+.bar {
+  position: fixed; bottom: 0; left: 0; right: 0; padding: 10px 18px;
+  background: var(--panel); border-top: 1px solid var(--line);
+  display: flex; gap: 10px; align-items: center; justify-content: flex-end;
+}
+.bar .msg { margin-right: auto; font-size: 13px; color: var(--ink-2); }
+.bar .msg.err { color: var(--fail); }
+.bar .msg.ok { color: var(--pass); }
+
+pre.preview {
+  white-space: pre-wrap; word-break: break-word; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+  max-height: 460px; overflow: auto; margin: 0;
+}
+.verdict { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; margin-bottom: 8px; background: var(--panel-2); }
+.badge { font-weight: 700; font-size: 12px; padding: 3px 9px; border-radius: 6px; height: fit-content; letter-spacing: .4px; }
+.badge.PASS { background: var(--pass-bg); color: var(--pass); }
+.badge.FAIL { background: var(--fail-bg); color: var(--fail); }
+.verdict .body { flex: 1; min-width: 0; }
+.verdict .cid { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+.verdict .meta { color: var(--ink-2); font-size: 12px; margin: 2px 0 6px; }
+.verdict blockquote {
+  margin: 0; padding: 7px 10px; border-left: 3px solid var(--line);
+  background: var(--bg); font-family: var(--mono); font-size: 12.5px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.note { padding: 9px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 10px; }
+.note.warn { background: var(--warn-bg); color: var(--warn); }
+.empty { color: var(--ink-2); font-style: italic; padding: 6px 0; }
+.hint { color: var(--ink-2); font-size: 12px; margin-top: 4px; }
+.tag { font-family: var(--mono); font-size: 12px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+.pill.sandbox { background: var(--warn-bg); color: var(--warn); border-color: transparent; font-weight: 600; }
+.track { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.track .step {
+  flex: 1 1 150px; padding: 8px 12px; border-radius: 9px; font-size: 12px;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2);
+}
+.track .step b { display: block; font-size: 13.5px; color: var(--ink); }
+.track .step.current { border-color: var(--accent); }
+.track .step.passed { background: var(--pass-bg); border-color: transparent; color: var(--pass); }
+.track .step.passed b { color: var(--pass); }
+.track .step.locked { opacity: .45; }
+.task {
+  background: var(--panel-2); border-left: 3px solid var(--accent);
+  padding: 11px 14px; border-radius: 0 8px 8px 0; margin-bottom: 14px; white-space: pre-wrap;
+}
+.attempt-row { display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px; }
+.attempt-row .n { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+
+.badge.stale { background: var(--warn-bg); color: var(--warn); }
+.badge.unjudged { background: var(--panel-2); color: var(--ink-2); border: 1px solid var(--line); }
+.rub-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.rub-head h3 { margin: 0; }
+.rub-head .count { color: var(--ink-2); font-size: 12px; margin-left: auto; }
+.rub-row { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.rub-row:last-child { border-bottom: none; }
+.rub-row .body { flex: 1; min-width: 0; }
+.rub-row .cid { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+.rub-row details { margin-top: 6px; }
+.rub-row summary { cursor: pointer; font-size: 12px; color: var(--ink-2); }
+.rub-row .guide { white-space: pre-wrap; font-size: 12.5px; color: var(--ink-2); margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">CLive Studio <span>&nbsp;PCDIT authoring</span></div>
+  <nav class="phases" id="phaseNav"></nav>
+  <div class="spacer"></div>
+  <div class="pill" id="tallyPill" title="Across every phase, for the current problem"></div>
+  <div class="pill sandbox" id="modePill" hidden>Sandbox — nothing is written to disk</div>
+  <button class="mini" id="modeToggle">…</button>
+  <div class="pill" id="keyPill">…</div>
+</header>
+
+<nav class="tabs" id="tabNav"></nav>
+<main id="main"></main>
+
+<div class="bar">
+  <div class="msg" id="msg"></div>
+  <div id="barActions"></div>
+</div>
+
+<script>
+"use strict";
+
+const TABS = [
+  { id: "session",  label: "Session", sandboxOnly: true },
+  { id: "rubric",   label: "Rubric" },
+  { id: "criteria", label: "Criteria" },
+  { id: "problem",  label: "Problem" },
+  { id: "prompt",   label: "Prompt" },
+  { id: "run",      label: "Run", filesOnly: true },
+];
+
+const S = {
+  boot: null,
+  phaseId: null, phase: null, criteria: null,
+  problemSlug: null, problem: null,
+  tab: "criteria",
+  dirty: { criteria: false, problem: false, prompt: false },
+  preview: null, result: null, running: false,
+  // "files": S.phase / S.criteria / S.problem come from the server and saves write
+  // YAML. "sandbox": they are references into S.sandbox and nothing touches disk.
+  // The editors are identical either way — only the source and the save differ.
+  mode: "files",
+  sandbox: null,
+  // Every phase's criteria, fetched once and refreshed after an edit. The header
+  // tally recomputes on every render, so this must never be a per-render fetch.
+  rubric: null,
+};
+
+const visibleTabs = () =>
+  TABS.filter((t) => !(t.sandboxOnly && S.mode !== "sandbox") && !(t.filesOnly && S.mode !== "files"));
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const el = (tag, props = {}, kids = []) => {
+  const n = Object.assign(document.createElement(tag), props);
+  for (const k of [].concat(kids)) n.append(k);
+  return n;
+};
+const esc = (s) => String(s ?? "");
+
+// ------------------------------------------------------------------ transport
+
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let data;
+  try { data = await res.json(); } catch { throw new Error(`${res.status} ${res.statusText}`); }
+  if (!res.ok) throw new Error(data.error || `${res.status}`);
+  return data;
+}
+
+let msgTimer = null;
+function say(text, kind = "") {
+  const m = $("#msg");
+  m.textContent = text;
+  m.className = "msg " + kind;
+  clearTimeout(msgTimer);
+  if (kind === "ok") msgTimer = setTimeout(() => { m.textContent = ""; }, 3500);
+}
+
+// ---------------------------------------------------------------------- state
+
+function markDirty(which) { S.dirty[which] = true; renderBar(); }
+
+function anyDirty() { return Object.values(S.dirty).some(Boolean); }
+
+function confirmLeave() {
+  if (!anyDirty()) return true;
+  return confirm("You have unsaved changes. Discard them?");
+}
+
+async function loadPhase(phaseId) {
+  if (S.mode === "sandbox") {
+    // A phase added to disk after the snapshot was taken has no scratch copy yet.
+    if (!S.sandbox.phases[phaseId]) {
+      const d = await api("GET", `/api/phase/${phaseId}`);
+      S.sandbox.phases[phaseId] = d.phase;
+      S.sandbox.criteria[phaseId] = d.criteria;
+      writeSandbox();
+    }
+    S.phase = S.sandbox.phases[phaseId];
+    S.criteria = S.sandbox.criteria[phaseId];
+  } else {
+    const d = await api("GET", `/api/phase/${phaseId}`);
+    S.phase = d.phase;
+    S.criteria = d.criteria;
+  }
+  S.phaseId = phaseId;
+  S.dirty = { criteria: false, problem: S.dirty.problem, prompt: false };
+  S.preview = null;
+  S.result = null;
+}
+
+async function loadProblem(slug) {
+  if (S.mode === "sandbox") {
+    if (!S.sandbox.problems[slug]) {
+      S.sandbox.problems[slug] = (await api("GET", `/api/problem/${slug}`)).problem;
+      writeSandbox();
+    }
+    S.problem = S.sandbox.problems[slug];
+  } else {
+    const d = await api("GET", `/api/problem/${slug}`);
+    S.problem = d.problem;
+  }
+  S.problemSlug = slug;
+  S.dirty.problem = false;
+}
+
+// Keep whatever the user typed into the Run form, per phase + problem, so
+// switching tabs to tweak a criterion does not throw the submission away.
+const draftKey = () => `clive.draft.${S.phaseId}.${S.problemSlug}`;
+function readDraft() {
+  try { return JSON.parse(localStorage.getItem(draftKey()) || "{}"); } catch { return {}; }
+}
+function writeDraft(artifact) {
+  try { localStorage.setItem(draftKey(), JSON.stringify(artifact)); } catch { /* private mode */ }
+}
+// The attempt counter shares the draft record but is not an artifact field.
+function artifactFromDraft() {
+  const { __attempt, ...artifact } = readDraft();
+  return artifact;
+}
+
+// Discarding has to re-read from disk: the editors mutate S.phase / S.criteria /
+// S.problem in place, so clearing the dirty flag alone would leave the abandoned
+// edits sitting in memory, ready to be written by the next save.
+async function reloadAll() {
+  // In sandbox the editors mutate the scratch objects in place, so "discard" means
+  // re-reading the last persisted store rather than re-fetching from the server.
+  if (S.mode === "sandbox") S.sandbox = readSandbox() || S.sandbox;
+  await loadPhase(S.phaseId);
+  await loadProblem(S.problemSlug);
+  resetDirty();
+}
+
+// --------------------------------------------------------------------- status
+
+const STATUS_KEY = "clive.status.v1";
+
+/**
+ * Cheap synchronous hash (djb2) of what a criterion actually asks.
+ *
+ * This, not `criteria_version`, is what decides whether a stored verdict is still
+ * trustworthy: the version is a human-maintained label that can be bumped without a
+ * wording change or changed without a bump, whereas the hash is a fact about the text
+ * the judge was given. crypto.subtle would be stronger and is async, which would drag
+ * render() into promise-land for no benefit — collisions here cost a stale marker, not
+ * correctness.
+ */
+function criterionHash(c) {
+  const s = `${c.text || ""}\u0000${c.guidance || ""}`;
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+function readStatus() {
+  try { return JSON.parse(localStorage.getItem(STATUS_KEY) || "{}"); } catch { return {}; }
+}
+
+function writeStatus(store) {
+  try { localStorage.setItem(STATUS_KEY, JSON.stringify(store)); } catch { /* private mode */ }
+}
+
+/** Statuses for one mode and problem. File and sandbox verdicts are kept in separate
+ *  buckets so an experiment against a gutted rubric never reads as the real thing. */
+function statusBucket(mode = S.mode, problem = S.problemSlug) {
+  return (readStatus()[mode] || {})[problem] || {};
+}
+
+/** The single writer, called after every judged run in either mode. */
+function recordStatus(verdicts, criteria, attempt) {
+  const store = readStatus();
+  const byMode = (store[S.mode] = store[S.mode] || {});
+  const byProblem = (byMode[S.problemSlug] = byMode[S.problemSlug] || {});
+  const hashes = Object.fromEntries(criteria.map((c) => [c.id, criterionHash(c)]));
+
+  const kept = {};
+  for (const v of verdicts) {
+    // A verdict for an id no longer in the rubric is dropped, which is also how an
+    // orphaned entry from a deleted criterion gets pruned.
+    if (!(v.criterion_id in hashes)) continue;
+    kept[v.criterion_id] = {
+      verdict: v.verdict,
+      confidence: v.confidence,
+      evidence: v.evidence,
+      evidence_found: v.evidence_found,
+      hash: hashes[v.criterion_id],
+    };
+  }
+
+  byProblem[S.phaseId] = {
+    criteria_version: (S.criteria && S.criteria.version) || 1,
+    judged_at: new Date().toISOString(),
+    attempt,
+    verdicts: kept,
+  };
+  writeStatus(store);
+}
+
+/** Every phase's criteria for the active mode, newest first by phase order. */
+function allRubrics() {
+  if (S.mode === "sandbox" && S.sandbox) {
+    // seedSandbox already snapshotted every phase, so this needs no fetch.
+    return S.boot.phases.map((p) => {
+      const doc = S.sandbox.criteria[p.phase] || { version: 1, criteria: [] };
+      return {
+        phase: p.phase,
+        label: (S.sandbox.phases[p.phase] || {}).label || p.label,
+        criteria_version: doc.version || 1,
+        criteria: doc.criteria || [],
+      };
+    });
+  }
+  return S.rubric || [];
+}
+
+async function loadRubric() {
+  try {
+    S.rubric = (await api("GET", "/api/rubric")).rubric;
+  } catch (e) {
+    say(e.message, "err");
+  }
+}
+
+/**
+ * What one criterion's status is right now. Four outcomes: PASS, FAIL, "stale"
+ * (judged, but the wording changed since), and "unjudged" (added since the last run,
+ * or never run at all).
+ */
+function statusOf(bucket, phaseId, criterion) {
+  const stored = ((bucket[phaseId] || {}).verdicts || {})[criterion.id];
+  if (!stored) return { state: "unjudged" };
+  const stale = stored.hash !== criterionHash(criterion);
+  return { ...stored, stale, state: stale ? "stale" : stored.verdict };
+}
+
+/** Counts across every phase, for the header pill and the per-phase headings. */
+function tally(groups, bucket) {
+  const out = { total: 0, PASS: 0, FAIL: 0, stale: 0, unjudged: 0 };
+  for (const g of groups) {
+    for (const c of g.criteria) {
+      out.total++;
+      out[statusOf(bucket, g.phase, c).state]++;
+    }
+  }
+  return out;
+}
+
+// -------------------------------------------------------------------- sandbox
+
+const SANDBOX_KEY = "clive.sandbox.v1";
+
+function writeSandbox() {
+  try { localStorage.setItem(SANDBOX_KEY, JSON.stringify(S.sandbox)); }
+  catch { say("Sandbox is too large for browser storage; changes are in memory only.", "err"); }
+}
+
+function readSandbox() {
+  try { return JSON.parse(localStorage.getItem(SANDBOX_KEY) || "null"); } catch { return null; }
+}
+
+/** Snapshot every phase, rubric, and problem from disk into a scratch copy. */
+async function seedSandbox() {
+  const box = { phases: {}, criteria: {}, problems: {}, session: null, settings: { carryForward: false } };
+  for (const p of S.boot.phases) {
+    const d = await api("GET", `/api/phase/${p.phase}`);
+    box.phases[p.phase] = d.phase;
+    box.criteria[p.phase] = d.criteria;
+  }
+  for (const pr of S.boot.problems) {
+    box.problems[pr.slug] = (await api("GET", `/api/problem/${pr.slug}`)).problem;
+  }
+  box.session = freshSession(S.problemSlug || S.boot.problems[0].slug);
+  return box;
+}
+
+/** A new run through the phases: only the first is unlocked. */
+function freshSession(problemSlug) {
+  const phases = {};
+  S.boot.phases.forEach((p, i) => {
+    phases[p.phase] = { attempt: 1, passed: false, unlocked: i === 0, artifact: {}, transcript: [] };
+  });
+  return { problem: problemSlug, phases };
+}
+
+function sess(phaseId) {
+  const id = phaseId || S.phaseId;
+  const phases = S.sandbox.session.phases;
+  if (!phases[id]) {
+    phases[id] = { attempt: 1, passed: false, unlocked: false, artifact: {}, transcript: [] };
+  }
+  return phases[id];
+}
+
+/**
+ * What earlier phases produced, for the carry-forward toggle. Only phases before
+ * this one in `order`, and only those actually submitted — an empty list keeps the
+ * EARLIER PHASES block out of the prompt entirely.
+ */
+function priorArtifacts() {
+  if (!S.sandbox || !S.sandbox.settings.carryForward) return [];
+  const out = [];
+  for (const p of S.boot.phases) {
+    if (p.phase === S.phaseId) break;
+    const st = sess(p.phase);
+    const phase = S.sandbox.phases[p.phase];
+    const fields = (phase.artifact_fields || [])
+      .filter((f) => (st.artifact[f.id] || "").trim())
+      .map((f) => ({ label: f.label || f.id, value: st.artifact[f.id] }));
+    if (fields.length) out.push({ label: phase.label || p.phase, fields });
+  }
+  return out;
+}
+
+/** The request body for /api/judge and /api/preview. */
+function judgeContext(extra = {}) {
+  const body = { phase_id: S.phaseId, problem: S.problemSlug, ...extra };
+  if (S.mode === "sandbox") {
+    // Send the scratch copy so the server judges what is on screen, not on disk.
+    body.phase = S.phase;
+    body.criteria = S.criteria.criteria;
+    body.problem = S.problem;
+  }
+  return body;
+}
+
+async function setMode(mode) {
+  if (mode === S.mode) return;
+  if (!confirmLeave()) return;
+  if (mode === "sandbox") {
+    S.sandbox = readSandbox();
+    if (!S.sandbox) {
+      say("Seeding sandbox from the current files…");
+      S.sandbox = await seedSandbox();
+      writeSandbox();
+    }
+  }
+  S.mode = mode;
+  resetDirty();
+  await loadPhase(S.phaseId);
+  await loadProblem(S.mode === "sandbox" ? S.sandbox.session.problem : S.problemSlug);
+  if (!visibleTabs().some((x) => x.id === S.tab)) S.tab = mode === "sandbox" ? "session" : "run";
+  say(mode === "sandbox" ? "Sandbox on — edits stay in the browser." : "Back on the real files.", "ok");
+  render();
+}
+
+async function resetSandbox() {
+  if (!confirm("Discard every sandbox edit and re-seed from the files on disk?")) return;
+  S.sandbox = await seedSandbox();
+  writeSandbox();
+  resetDirty();
+  await loadPhase(S.phaseId);
+  await loadProblem(S.sandbox.session.problem);
+  say("Sandbox re-seeded from disk.", "ok");
+  render();
+}
+
+async function promote() {
+  const parts = [];
+  if (confirm(`Write the sandbox copy of "${S.phase.label}" back to the real files?
+
+OK = phase prompt + criteria + problem.`)) {
+    parts.push("phase", "criteria", "problem");
+  } else return;
+  try {
+    const d = await api("POST", "/api/promote", {
+      parts,
+      phase_id: S.phaseId,
+      problem_id: S.problemSlug,
+      phase: S.phase,
+      criteria_doc: S.criteria,
+      problem: S.problem,
+    });
+    S.boot.phases = d.phases;
+    S.boot.problems = d.problems;
+    await loadRubric();
+    say(`Wrote ${d.written.join(", ")}`, "ok");
+    render();
+  } catch (e) { say(e.message, "err"); }
+}
+
+// --------------------------------------------------------------------- chrome
+
+function renderChrome() {
+  const nav = $("#phaseNav");
+  nav.replaceChildren(...S.boot.phases.map((p) => {
+    const b = el("button", { textContent: p.label, className: p.phase === S.phaseId ? "on" : "" });
+    b.title = `${p.phase} · v${p.version}`;
+    b.onclick = async () => {
+      if (p.phase === S.phaseId || !confirmLeave()) return;
+      // loadPhase re-reads the phase and its criteria; the problem is separate,
+      // so a discarded problem edit has to be thrown away explicitly.
+      if (S.dirty.problem) await loadProblem(S.problemSlug);
+      resetDirty();
+      await loadPhase(p.phase);
+      render();
+    };
+    return b;
+  }));
+
+  const tabs = $("#tabNav");
+  tabs.replaceChildren(...visibleTabs().map((t) => {
+    const b = el("button", { textContent: t.label, className: t.id === S.tab ? "on" : "" });
+    b.onclick = async () => {
+      if (!confirmLeave()) return;
+      if (anyDirty()) await reloadAll();
+      S.tab = t.id;
+      render();
+    };
+    return b;
+  }));
+
+  const pill = $("#keyPill");
+  pill.textContent = S.boot.has_api_key
+    ? `${S.boot.provider} key loaded`
+    : "no API key — judging disabled";
+  pill.className = S.boot.has_api_key ? "pill" : "pill bad";
+
+  // Cross-phase tally, recomputed from cached state on every render — no fetch here.
+  const t = tally(allRubrics(), statusBucket());
+  const tallyPill = $("#tallyPill");
+  tallyPill.textContent = t.total
+    ? `${t.PASS}/${t.total} passing` + (t.stale ? ` · ${t.stale} stale` : "")
+    : "no criteria";
+  tallyPill.className = t.stale ? "pill bad" : "pill";
+  tallyPill.onclick = () => { if (confirmLeave()) { S.tab = "rubric"; render(); } };
+  tallyPill.style = "cursor:pointer";
+
+  $("#modePill").hidden = S.mode !== "sandbox";
+  const toggle = $("#modeToggle");
+  toggle.textContent = S.mode === "sandbox" ? "Leave sandbox" : "Enter sandbox";
+  toggle.onclick = () => setMode(S.mode === "sandbox" ? "files" : "sandbox");
+}
+
+function resetDirty() { S.dirty = { criteria: false, problem: false, prompt: false }; }
+
+function renderBar() {
+  const box = $("#barActions");
+  const kids = [];
+
+  if (S.mode === "sandbox" && S.tab !== "session" && S.tab !== "rubric") {
+    const reset = el("button", { className: "act ghost", textContent: "Reset sandbox" });
+    reset.onclick = resetSandbox;
+    const push = el("button", { className: "act ghost", textContent: "Promote to files" });
+    push.onclick = promote;
+    kids.push(reset, push);
+  }
+
+  if (S.tab === "criteria") kids.push(saveButton("criteria", saveCriteria));
+  if (S.tab === "problem") kids.push(saveButton("problem", saveProblem));
+  if (S.tab === "prompt") kids.push(saveButton("prompt", savePhase));
+  if (S.tab === "run" || S.tab === "session") {
+    const b = el("button", {
+      className: "act",
+      textContent: S.running ? "Judging…" : S.tab === "session" ? "Submit for judging" : "Run judge",
+      disabled: S.running || !S.boot.has_api_key,
+    });
+    b.onclick = S.tab === "session" ? submitSession : runJudge;
+    kids.push(b);
+  }
+  box.replaceChildren(...kids);
+}
+
+function saveButton(which, fn) {
+  // In sandbox the button still exists so the editors behave the same way, but it
+  // commits to the scratch copy rather than to a file.
+  const label = S.mode === "sandbox" ? "Apply to sandbox" : "Save changes";
+  const b = el("button", {
+    className: "act",
+    textContent: S.dirty[which] ? label : "Saved",
+    disabled: !S.dirty[which],
+  });
+  b.onclick = fn;
+  return b;
+}
+
+/** Sandbox saves are a localStorage write — the editors mutate the scratch objects
+ *  in place, so committing is just persisting the store. Returns true if handled. */
+function savedToSandbox(which, what) {
+  if (S.mode !== "sandbox") return false;
+  writeSandbox();
+  S.dirty[which] = false;
+  say(`${what} applied to the sandbox — no file written.`, "ok");
+  render();
+  return true;
+}
+
+// ---------------------------------------------------------------------- forms
+
+function field(labelText, node, hint) {
+  const wrap = el("div", { className: "f" }, [el("label", { textContent: labelText }), node]);
+  if (hint) wrap.append(el("div", { className: "hint", textContent: hint }));
+  return wrap;
+}
+
+function textInput(value, oninput, opts = {}) {
+  const i = el("input", { value: esc(value), className: opts.mono ? "mono" : "" });
+  if (opts.type) i.type = opts.type;
+  if (opts.placeholder) i.placeholder = opts.placeholder;
+  i.oninput = () => oninput(i.value);
+  return i;
+}
+
+function textArea(value, oninput, rows = 4, mono = false) {
+  const t = el("textarea", { value: esc(value), rows, className: mono ? "mono" : "" });
+  t.oninput = () => oninput(t.value);
+  return t;
+}
+
+function selectInput(value, options, oninput) {
+  const s = el("select");
+  for (const o of options) {
+    const opt = el("option", { value: o, textContent: o });
+    if (o === value) opt.selected = true;
+    s.append(opt);
+  }
+  s.onchange = () => oninput(s.value);
+  return s;
+}
+
+function reorderControls(list, index, onchange) {
+  const up = el("button", { className: "mini", textContent: "↑", disabled: index === 0 });
+  const down = el("button", { className: "mini", textContent: "↓", disabled: index === list.length - 1 });
+  up.onclick = () => { [list[index - 1], list[index]] = [list[index], list[index - 1]]; onchange(); };
+  down.onclick = () => { [list[index + 1], list[index]] = [list[index], list[index + 1]]; onchange(); };
+  return [up, down];
+}
+
+// ------------------------------------------------------------------- criteria
+
+function renderCriteria() {
+  const c = S.criteria;
+  const out = el("div");
+
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: `Criteria — ${S.phase.label}` }),
+    el("p", {
+      className: "sub",
+      textContent: "One PASS/FAIL rule each. The judge returns exactly one verdict per criterion, "
+        + "judged only against that criterion's own text and guidance.",
+    }),
+    el("div", { className: "row" }, [
+      field("Rubric version", textInput(c.version, (v) => { c.version = v; markDirty("criteria"); }, { type: "number" }),
+        "cases/suites/*.yaml pin this as criteria_version. Bump it when a rule's meaning changes."),
+      field("File", el("input", { value: `criteria/${S.phaseId}.yaml`, readOnly: true, className: "mono" })),
+    ]),
+  ]));
+
+  const list = el("div");
+  if (!c.criteria.length) list.append(el("p", { className: "empty", textContent: "No criteria yet." }));
+
+  c.criteria.forEach((item, i) => {
+    const head = el("div", { className: "head" }, [el("div", { className: "grip", textContent: `#${i + 1}` })]);
+    head.append(...reorderControls(c.criteria, i, () => { markDirty("criteria"); render(); }));
+    const del = el("button", { className: "mini", textContent: "Remove" });
+    del.onclick = () => { c.criteria.splice(i, 1); markDirty("criteria"); render(); };
+    head.append(el("div", { className: "spacer", style: "flex:1" }), del);
+
+    list.append(el("div", { className: "item" }, [
+      head,
+      el("div", { className: "row" }, [
+        field("id", textInput(item.id, (v) => { item.id = v; markDirty("criteria"); }, { mono: true, placeholder: "lower_snake_case" })),
+        field("text (the rule, as one sentence)", textInput(item.text, (v) => { item.text = v; markDirty("criteria"); })),
+      ]),
+      field("guidance (when to PASS, when to FAIL)",
+        textArea(item.guidance, (v) => { item.guidance = v; markDirty("criteria"); }, 5)),
+    ]));
+  });
+
+  const add = el("button", { className: "act ghost", textContent: "+ Add criterion" });
+  add.onclick = () => {
+    S.criteria.criteria.push({ id: "", text: "", guidance: "" });
+    markDirty("criteria");
+    render();
+  };
+  out.append(el("div", { className: "card" }, [list, add]));
+  return out;
+}
+
+async function saveCriteria() {
+  if (savedToSandbox("criteria", "Criteria")) return;
+  try {
+    const d = await api("PUT", `/api/criteria/${S.phaseId}`, S.criteria);
+    S.criteria = d.criteria;
+    S.dirty.criteria = false;
+    // The edit may have just invalidated a stored verdict; refresh so the Rubric
+    // tab and the header tally show the staleness immediately.
+    await loadRubric();
+    say(`Saved criteria/${S.phaseId}.yaml`, "ok");
+    render();
+  } catch (e) { say(e.message, "err"); }
+}
+
+// -------------------------------------------------------------------- problem
+
+function problemPicker(onchange) {
+  const s = el("select");
+  for (const p of S.boot.problems) {
+    const o = el("option", { value: p.slug, textContent: `${p.title} (${p.slug})` });
+    if (p.slug === S.problemSlug) o.selected = true;
+    s.append(o);
+  }
+  s.onchange = () => onchange(s.value);
+  return s;
+}
+
+function renderProblem() {
+  const p = S.problem;
+  const out = el("div");
+
+  const picker = problemPicker(async (slug) => {
+    if (!confirmLeave()) { render(); return; }
+    if (anyDirty()) await reloadAll();
+    await loadProblem(slug);
+    S.result = null;
+    render();
+  });
+
+  const create = el("button", { className: "act ghost", textContent: "+ New problem" });
+  create.onclick = newProblem;
+  const remove = el("button", { className: "act ghost danger", textContent: "Delete" });
+  remove.onclick = deleteProblem;
+
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: "Problem" }),
+    el("p", { className: "sub", textContent: "Shared by all three phases. Stored in cases/problems/." }),
+    el("div", { className: "row" }, [
+      field("Open problem", picker),
+      el("div", { className: "row", style: "flex:0 0 auto" }, [create, remove]),
+    ]),
+  ]));
+
+  out.append(el("div", { className: "card" }, [
+    el("div", { className: "row" }, [
+      field("id", textInput(p.id, (v) => { p.id = v; markDirty("problem"); }, { mono: true })),
+      field("title", textInput(p.title, (v) => { p.title = v; markDirty("problem"); })),
+      field("difficulty", textInput(p.difficulty, (v) => { p.difficulty = v; markDirty("problem"); },
+        { placeholder: "introductory" })),
+      field("topics (comma separated)",
+        textInput([].concat(p.topics || []).join(", "), (v) => {
+          p.topics = v.split(",").map((t) => t.trim()).filter(Boolean);
+          markDirty("problem");
+        })),
+    ]),
+    field("statement", textArea(p.statement, (v) => { p.statement = v; markDirty("problem"); }, 12)),
+  ]));
+
+  const cases = el("div");
+  const list = p.public_test_cases || (p.public_test_cases = []);
+  if (!list.length) cases.append(el("p", { className: "empty", textContent: "No public test cases." }));
+
+  list.forEach((tc, i) => {
+    const head = el("div", { className: "head" }, [el("div", { className: "grip", textContent: `#${i + 1}` })]);
+    head.append(...reorderControls(list, i, () => { markDirty("problem"); render(); }));
+    const del = el("button", { className: "mini", textContent: "Remove" });
+    del.onclick = () => { list.splice(i, 1); markDirty("problem"); render(); };
+    head.append(el("div", { style: "flex:1" }), del);
+
+    cases.append(el("div", { className: "item" }, [
+      head,
+      el("div", { className: "row" }, [
+        field("input", textArea(tc.input, (v) => { tc.input = v; markDirty("problem"); }, 3, true)),
+        field("output", textArea(tc.output, (v) => { tc.output = v; markDirty("problem"); }, 3, true)),
+      ]),
+    ]));
+  });
+
+  const addCase = el("button", { className: "act ghost", textContent: "+ Add test case" });
+  addCase.onclick = () => { list.push({ input: "", output: "" }); markDirty("problem"); render(); };
+
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: "Public test cases" }),
+    el("p", {
+      className: "sub",
+      textContent: "Given to the student, and shown to the judge as context. The judge is told never to quote them as evidence.",
+    }),
+    cases, addCase,
+  ]));
+
+  return out;
+}
+
+async function saveProblem() {
+  if (savedToSandbox("problem", "Problem")) return;
+  try {
+    const d = await api("PUT", `/api/problem/${S.problemSlug}`, S.problem);
+    S.problem = d.problem;
+    S.boot.problems = d.problems;
+    S.dirty.problem = false;
+    say(`Saved cases/problems/${S.problemSlug}.yaml`, "ok");
+    render();
+  } catch (e) { say(e.message, "err"); }
+}
+
+async function newProblem() {
+  if (S.mode === "sandbox") {
+    say("Creating a problem writes a file — leave the sandbox first.", "err");
+    return;
+  }
+  if (!confirmLeave()) return;
+  const slug = (prompt("New problem file name (lower_snake_case):") || "").trim();
+  if (!slug) return;
+  try {
+    const d = await api("PUT", `/api/problem/${slug}`, {
+      id: `problem.${slug}`,
+      title: slug.replace(/_/g, " "),
+      difficulty: "introductory",
+      topics: [],
+      statement: "Describe the task here.\n",
+      public_test_cases: [],
+    });
+    S.boot.problems = d.problems;
+    await loadProblem(slug);
+    say(`Created cases/problems/${slug}.yaml`, "ok");
+    render();
+  } catch (e) { say(e.message, "err"); }
+}
+
+async function deleteProblem() {
+  if (S.mode === "sandbox") {
+    say("Deleting a problem writes to disk — leave the sandbox first.", "err");
+    return;
+  }
+  if (!confirm(`Delete cases/problems/${S.problemSlug}.yaml? This cannot be undone.`)) return;
+  try {
+    const d = await api("DELETE", `/api/problem/${S.problemSlug}`);
+    S.boot.problems = d.problems;
+    resetDirty();
+    await loadProblem(d.problems[0].slug);
+    say("Deleted.", "ok");
+    render();
+  } catch (e) { say(e.message, "err"); }
+}
+
+// --------------------------------------------------------------------- prompt
+
+function renderPrompt() {
+  const ph = S.phase;
+  const out = el("div");
+
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: `Prompt — ${ph.label}` }),
+    el("p", { className: "sub", textContent: `prompts/phases/${S.phaseId}.yaml` }),
+    el("div", { className: "row" }, [
+      field("label", textInput(ph.label, (v) => { ph.label = v; markDirty("prompt"); })),
+      field("order", textInput(ph.order, (v) => { ph.order = Number(v); markDirty("prompt"); }, { type: "number" })),
+      field("version", textInput(ph.version, (v) => { ph.version = Number(v); markDirty("prompt"); }, { type: "number" })),
+    ]),
+    el("div", { className: "row" }, [
+      field("model", selectInput(ph.model.id, modelOptions(ph.model.id), (v) => { ph.model.id = v; markDirty("prompt"); })),
+      field("effort", selectInput(ph.model.effort, S.boot.efforts, (v) => { ph.model.effort = v; markDirty("prompt"); }),
+        "Replaces temperature, which current models reject."),
+      field("max_output_tokens",
+        textInput(ph.model.max_output_tokens, (v) => { ph.model.max_output_tokens = Number(v); markDirty("prompt"); }, { type: "number" }),
+        "Thinking tokens come out of this same budget."),
+    ]),
+    field("changelog (why this version differs from the last)",
+      textArea(ph.changelog || "", (v) => { ph.changelog = v; markDirty("prompt"); }, 3)),
+  ]));
+
+  // artifact fields
+  const fields = ph.artifact_fields || (ph.artifact_fields = []);
+  const fieldList = el("div");
+  if (!fields.length) fieldList.append(el("p", { className: "empty", textContent: "No fields — the student would submit nothing." }));
+
+  fields.forEach((f, i) => {
+    const head = el("div", { className: "head" }, [el("div", { className: "grip", textContent: `#${i + 1}` })]);
+    head.append(...reorderControls(fields, i, () => { markDirty("prompt"); render(); }));
+    const del = el("button", { className: "mini", textContent: "Remove" });
+    del.onclick = () => { fields.splice(i, 1); markDirty("prompt"); render(); };
+    head.append(el("div", { style: "flex:1" }), del);
+
+    fieldList.append(el("div", { className: "item" }, [
+      head,
+      el("div", { className: "row" }, [
+        field("id", textInput(f.id, (v) => { f.id = v; markDirty("prompt"); }, { mono: true })),
+        field("label", textInput(f.label, (v) => { f.label = v; markDirty("prompt"); })),
+        field("rows", textInput(f.rows || 4, (v) => { f.rows = Number(v); markDirty("prompt"); }, { type: "number" })),
+      ]),
+      field("hint (shown under the box in Run)", textInput(f.hint || "", (v) => { f.hint = v; markDirty("prompt"); })),
+    ]));
+  });
+
+  const addField = el("button", { className: "act ghost", textContent: "+ Add artifact field" });
+  addField.onclick = () => { fields.push({ id: "", label: "", hint: "", rows: 4 }); markDirty("prompt"); render(); };
+
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: "Artifact fields" }),
+    el("p", {
+      className: "sub",
+      textContent: "What the student submits for this phase. Each one becomes a box in Run and a labelled block "
+        + "in the template's artifact loop — add a field here and it appears in the prompt without a template edit.",
+    }),
+    fieldList, addField,
+  ]));
+
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: "System prompt" }),
+    el("p", { className: "sub", textContent: "The judging contract. Applies to every criterion in this phase." }),
+    textArea(ph.system_prompt, (v) => { ph.system_prompt = v; markDirty("prompt"); }, 16, true),
+  ]));
+
+  const vars = el("p", { className: "sub" });
+  vars.append("Available: ");
+  for (const v of ["problem", "artifact", "artifact_fields", "criteria_to_judge", "attempt"]) {
+    vars.append(el("span", { className: "tag", textContent: v }), " ");
+  }
+
+  const previewBtn = el("button", { className: "act ghost", textContent: "Preview rendered prompt" });
+  previewBtn.onclick = doPreview;
+
+  const card = el("div", { className: "card" }, [
+    el("h3", { textContent: "User template (Jinja)" }),
+    vars,
+    textArea(ph.user_template, (v) => { ph.user_template = v; markDirty("prompt"); }, 20, true),
+    el("div", { style: "margin-top:10px" }, previewBtn),
+  ]);
+  if (S.preview) {
+    card.append(el("h3", { textContent: "Rendered", style: "margin-top:14px" }));
+    card.append(el("p", { className: "sub", textContent: `Against ${S.problemSlug}, using the Run tab's current draft artifact.` }));
+    card.append(el("pre", { className: "preview", textContent: S.preview }));
+  }
+  out.append(card);
+
+  return out;
+}
+
+function modelOptions(current) {
+  const list = S.boot.models.slice();
+  if (current && !list.includes(current)) list.unshift(current);
+  return list;
+}
+
+async function doPreview() {
+  try {
+    const d = await api("POST", "/api/preview", judgeContext({
+      phase: S.phase,
+      criteria: S.criteria.criteria,
+      artifact: S.mode === "sandbox" ? sess().artifact : artifactFromDraft(),
+      attempt: S.mode === "sandbox" ? sess().attempt : readDraft().__attempt || 1,
+      prior_artifacts: priorArtifacts(),
+    }));
+    S.preview = d.user_prompt;
+    say("Rendered against the unsaved editor state.", "ok");
+    render();
+  } catch (e) { say(e.message, "err"); }
+}
+
+async function savePhase() {
+  if (savedToSandbox("prompt", "Prompt")) return;
+  try {
+    const d = await api("PUT", `/api/phase/${S.phaseId}`, S.phase);
+    S.phase = d.phase;
+    S.dirty.prompt = false;
+    S.boot = { ...S.boot, phases: (await api("GET", "/api/bootstrap")).phases };
+    // A renamed label regroups the Rubric tab, so refresh alongside the phase list.
+    await loadRubric();
+    say(`Saved prompts/phases/${S.phaseId}.yaml`, "ok");
+    render();
+  } catch (e) { say(e.message, "err"); }
+}
+
+// ------------------------------------------------------------------------ run
+
+function renderRun() {
+  const out = el("div");
+  const draft = readDraft();
+
+  const picker = problemPicker(async (slug) => {
+    if (!confirmLeave()) { render(); return; }
+    if (anyDirty()) await reloadAll();
+    await loadProblem(slug);
+    S.result = null;
+    render();
+  });
+
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: `Run — ${S.phase.label}` }),
+    el("p", {
+      className: "sub",
+      textContent: `Judges one submission against all ${S.criteria.criteria.length} saved criteria in a single call, `
+        + `using ${S.phase.model.id} at effort ${S.phase.model.effort}. Saved criteria and prompt are used — save edits first.`,
+    }),
+    el("div", { className: "row" }, [
+      field("Problem", picker),
+      field("Attempt", textInput(draft.__attempt || 1, (v) => {
+        const d = readDraft(); d.__attempt = Number(v) || 1; writeDraft(d);
+      }, { type: "number" }), "Passed to the template as {{ attempt }}."),
+    ]),
+  ]));
+
+  const form = el("div", { className: "card" }, [el("h3", { textContent: "Student artifact" })]);
+  const fields = S.phase.artifact_fields || [];
+  if (!fields.length) form.append(el("p", { className: "empty", textContent: "This phase has no artifact fields. Add some in the Prompt tab." }));
+  for (const f of fields) {
+    form.append(field(
+      f.label || f.id,
+      textArea(draft[f.id] || "", (v) => { const d = readDraft(); d[f.id] = v; writeDraft(d); }, f.rows || 4),
+      f.hint,
+    ));
+  }
+  const clear = el("button", { className: "mini", textContent: "Clear this draft" });
+  clear.onclick = () => { localStorage.removeItem(draftKey()); render(); };
+  form.append(el("div", { style: "margin-top:8px" }, clear));
+  out.append(form);
+
+  if (S.result) out.append(renderResult(S.result));
+  return out;
+}
+
+function renderResult(r) {
+  const card = el("div", { className: "card" }, [el("h3", { textContent: "Verdicts" })]);
+  card.append(el("p", {
+    className: "sub",
+    textContent: `${r.model} · ${r.usage.input_tokens} in / ${r.usage.output_tokens} out`,
+  }));
+
+  if (r.missing_ids.length) {
+    card.append(el("div", { className: "note warn", textContent: `Judge returned no verdict for: ${r.missing_ids.join(", ")}` }));
+  }
+  if (r.unexpected_ids.length) {
+    card.append(el("div", { className: "note warn", textContent: `Judge invented criterion ids: ${r.unexpected_ids.join(", ")}` }));
+  }
+
+  for (const v of r.verdicts) {
+    const body = el("div", { className: "body" }, [
+      el("div", { className: "cid", textContent: v.criterion_id }),
+      el("div", { className: "meta", textContent: `confidence: ${v.confidence}` }),
+    ]);
+    if (v.evidence) {
+      body.append(el("blockquote", { textContent: v.evidence }));
+      if (!v.evidence_found) {
+        body.append(el("div", { className: "note warn", style: "margin-top:8px", textContent:
+          "This quote does not appear in the artifact — the judge asserted rather than observed." }));
+      }
+    } else {
+      body.append(el("div", { className: "meta", textContent: "no evidence quoted" }));
+    }
+    // Coaching seam: the judge does not return this field yet. When tutoring text is
+    // added to prompts/base/output_schema.json and the phase system prompts, it will
+    // render here for both the Run tab and a Sandbox session with no further change.
+    if (v.coaching) body.append(el("div", { className: "note", textContent: v.coaching }));
+    card.append(el("div", { className: "verdict" }, [
+      el("div", { className: `badge ${v.verdict}`, textContent: v.verdict }), body,
+    ]));
+  }
+  return card;
+}
+
+async function runJudge() {
+  const attempt = readDraft().__attempt || 1;
+  const artifact = artifactFromDraft();
+
+  S.running = true; S.result = null; renderBar();
+  say("Judging…");
+  try {
+    S.result = await api("POST", "/api/judge", judgeContext({ artifact, attempt }));
+    // Until now a Run result died with the next tab switch. Recording it is what
+    // gives the Rubric tab anything to show outside a sandbox session.
+    recordStatus(S.result.verdicts, S.criteria.criteria, attempt);
+    const failed = S.result.verdicts.filter((v) => v.verdict === "FAIL").length;
+    say(`${S.result.verdicts.length - failed} pass, ${failed} fail.`, "ok");
+  } catch (e) {
+    say(e.message, "err");
+  } finally {
+    S.running = false;
+    render();
+  }
+}
+
+// --------------------------------------------------------------------- rubric
+
+const STATE_LABEL = { PASS: "PASS", FAIL: "FAIL", stale: "STALE", unjudged: "—" };
+
+function renderRubric() {
+  const out = el("div");
+  const groups = allRubrics();
+  const bucket = statusBucket();
+  const t = tally(groups, bucket);
+
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: "Every criterion, every phase" }),
+    el("p", {
+      className: "sub",
+      textContent: `${t.total} criteria across ${groups.length} phases, judged against `
+        + `${S.problem ? S.problem.title : S.problemSlug}. Statuses shown are the `
+        + `${S.mode === "sandbox" ? "sandbox" : "real-file"} ones; the two are kept apart, `
+        + "so a sandbox experiment never reads as the saved rubric's status.",
+    }),
+    el("div", { className: "row" }, [
+      el("div", { className: "f" }, summaryLine(t)),
+    ]),
+  ]));
+
+  if (!t.total) {
+    out.append(el("div", { className: "card" }, [
+      el("p", { className: "empty", textContent: "No criteria defined in any phase yet." }),
+    ]));
+    return out;
+  }
+
+  for (const g of groups) {
+    const card = el("div", { className: "card" });
+    const gt = tally([g], bucket);
+    const head = el("div", { className: "rub-head" }, [
+      el("h3", { textContent: g.label }),
+      el("span", { className: "tag", textContent: `rubric v${g.criteria_version}` }),
+      el("span", {
+        className: "count",
+        textContent: `${gt.PASS}/${gt.total} passing`
+          + (gt.stale ? ` · ${gt.stale} stale` : "")
+          + (gt.unjudged ? ` · ${gt.unjudged} not judged` : ""),
+      }),
+    ]);
+    card.append(head);
+
+    if (!g.criteria.length) {
+      card.append(el("p", { className: "empty", textContent: "No criteria in this phase." }));
+    }
+    for (const c of g.criteria) {
+      card.append(rubricRow(g, c, statusOf(bucket, g.phase, c)));
+    }
+
+    const edit = el("button", { className: "mini", textContent: `Edit ${g.label} criteria` });
+    edit.onclick = async () => {
+      if (!confirmLeave()) return;
+      if (anyDirty()) await reloadAll();
+      await loadPhase(g.phase);
+      S.tab = "criteria";
+      render();
+    };
+    card.append(el("div", { style: "margin-top:10px" }, edit));
+    out.append(card);
+  }
+  return out;
+}
+
+function summaryLine(t) {
+  const bits = [
+    `${t.PASS} passing`,
+    `${t.FAIL} failing`,
+    t.stale ? `${t.stale} stale` : null,
+    `${t.unjudged} not yet judged`,
+  ].filter(Boolean);
+  return el("div", { textContent: bits.join("  ·  ") });
+}
+
+function rubricRow(group, criterion, st) {
+  const body = el("div", { className: "body" }, [
+    el("div", { textContent: criterion.text || "(no text)" }),
+    el("div", { className: "cid", textContent: criterion.id }),
+  ]);
+
+  if (st.state === "stale") {
+    body.append(el("div", { className: "note warn", style: "margin-top:6px", textContent:
+      `Last judged ${st.verdict}, but this criterion has been reworded since — `
+      + "the verdict is for text the judge never saw. Re-run to refresh it." }));
+  }
+
+  const detail = el("details");
+  detail.append(el("summary", { textContent: "guidance" + (st.evidence ? " and evidence" : "") }));
+  if (criterion.guidance) {
+    detail.append(el("div", { className: "guide", textContent: criterion.guidance.trim() }));
+  }
+  if (st.evidence) {
+    detail.append(el("blockquote", { textContent: st.evidence }));
+    if (st.evidence_found === false) {
+      detail.append(el("div", { className: "note warn", style: "margin-top:6px", textContent:
+        "This quote was not found in the artifact — the judge asserted rather than observed." }));
+    }
+  } else if (st.state === "PASS" || st.state === "FAIL") {
+    detail.append(el("div", { className: "meta", textContent: "no evidence quoted" }));
+  }
+  body.append(detail);
+
+  const badge = el("div", {
+    className: `badge ${st.state}`,
+    textContent: STATE_LABEL[st.state],
+  });
+  if (st.state === "stale") badge.title = `was ${st.verdict}`;
+  if (st.confidence) badge.title = `${badge.title || st.verdict} · confidence ${st.confidence}`;
+
+  return el("div", { className: "rub-row" }, [badge, body]);
+}
+
+// -------------------------------------------------------------------- session
+
+const phaseIndex = (id) => S.boot.phases.findIndex((p) => p.phase === id);
+const nextPhase = () => S.boot.phases[phaseIndex(S.phaseId) + 1] || null;
+
+function renderSession() {
+  const out = el("div");
+  const st = sess();
+
+  // Progress track: passed / current / unlocked / locked.
+  const track = el("div", { className: "track" });
+  S.boot.phases.forEach((p) => {
+    const ps = sess(p.phase);
+    const cls = ps.passed ? "passed" : p.phase === S.phaseId ? "current" : ps.unlocked ? "" : "locked";
+    const step = el("div", { className: `step ${cls}` }, [
+      el("b", { textContent: p.label }),
+      el("span", {
+        textContent: ps.passed ? "passed" : ps.unlocked ? `attempt ${ps.attempt}` : "locked",
+      }),
+    ]);
+    if (ps.unlocked && p.phase !== S.phaseId) {
+      step.style = "cursor:pointer";
+      step.onclick = async () => { await loadPhase(p.phase); render(); };
+    }
+    track.append(step);
+  });
+  out.append(track);
+
+  // Session controls.
+  const picker = problemPicker(async (slug) => {
+    S.sandbox.session = freshSession(slug);
+    writeSandbox();
+    await loadProblem(slug);
+    await loadPhase(S.boot.phases[0].phase);
+    S.result = null;
+    say("New problem — session restarted.", "ok");
+    render();
+  });
+
+  const carry = el("input", { type: "checkbox", checked: S.sandbox.settings.carryForward });
+  carry.style = "width:auto";
+  carry.onchange = () => {
+    S.sandbox.settings.carryForward = carry.checked;
+    writeSandbox();
+    render();
+  };
+
+  const controls = el("div", { className: "row" }, [
+    field("Problem", picker, "Changing it restarts the session."),
+    field("Carry earlier phases into the prompt",
+      el("div", {}, [carry, el("span", { textContent: " show this student's earlier work to the judge" })]),
+      "Off by default; with it off the prompt is identical to the Run tab's."),
+  ]);
+
+  const nxt = nextPhase();
+  const buttons = el("div", { className: "row", style: "margin-top:10px" });
+  if (nxt && !sess(nxt.phase).unlocked) {
+    const skip = el("button", { className: "mini", textContent: `Skip ahead — unlock ${nxt.label}` });
+    skip.onclick = () => {
+      sess(nxt.phase).unlocked = true;
+      writeSandbox();
+      say(`${nxt.label} unlocked without passing ${S.phase.label}.`, "ok");
+      render();
+    };
+    buttons.append(skip);
+  }
+  const restart = el("button", { className: "mini", textContent: "Restart session" });
+  restart.onclick = async () => {
+    if (!confirm("Clear every artifact, attempt count, and transcript in this session?")) return;
+    S.sandbox.session = freshSession(S.problemSlug);
+    writeSandbox();
+    await loadPhase(S.boot.phases[0].phase);
+    S.result = null;
+    render();
+  };
+  buttons.append(restart);
+  controls.append(buttons);
+
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: "Student session" }),
+    el("p", {
+      className: "sub",
+      textContent: "You are the student. Submissions are judged against the sandbox copy of the "
+        + "criteria and prompt, so any edit you made in the other tabs is already in play.",
+    }),
+    controls,
+  ]));
+
+  if (!st.unlocked) {
+    out.append(el("div", { className: "card" }, [
+      el("div", { className: "note warn", textContent:
+        `${S.phase.label} is locked. Pass the phases before it, or use "Skip ahead" from one of them.` }),
+    ]));
+    return out;
+  }
+
+  // The phase's own instructions, then the artifact form.
+  const form = el("div", { className: "card" }, [
+    el("h3", { textContent: `${S.phase.label} — attempt ${st.attempt}` }),
+  ]);
+  if (S.phase.task_description) {
+    form.append(el("div", { className: "task", textContent: S.phase.task_description.trim() }));
+  } else {
+    form.append(el("div", { className: "note warn", textContent:
+      "This phase has no task_description. Add one in the Prompt tab so the student knows what to do." }));
+  }
+  if (st.passed) {
+    form.append(el("div", { className: "note", style: "background:var(--pass-bg);color:var(--pass)",
+      textContent: "Already passed. You can still resubmit to see what a different answer scores." }));
+  }
+
+  const fields = S.phase.artifact_fields || [];
+  if (!fields.length) form.append(el("p", { className: "empty", textContent: "This phase has no artifact fields." }));
+  for (const f of fields) {
+    form.append(field(
+      f.label || f.id,
+      textArea(st.artifact[f.id] || "", (v) => { st.artifact[f.id] = v; writeSandbox(); }, f.rows || 4),
+      f.hint,
+    ));
+  }
+  out.append(form);
+
+  if (S.result) out.append(renderResult(S.result));
+  if (st.transcript.length > 1 || (st.transcript.length === 1 && !S.result)) {
+    out.append(renderTranscript(st));
+  }
+  return out;
+}
+
+function renderTranscript(st) {
+  const card = el("div", { className: "card" }, [
+    el("h3", { textContent: "Earlier attempts" }),
+    el("p", { className: "sub", textContent: "What was submitted each time, and how it scored." }),
+  ]);
+  for (const a of st.transcript.slice().reverse()) {
+    const line = a.verdicts.map((v) => `${v.criterion_id} ${v.verdict}`).join(" · ");
+    card.append(el("div", { className: "item" }, [
+      el("div", { className: "attempt-row" }, [
+        el("span", { className: "n", textContent: `attempt ${a.attempt}` }),
+        el("span", { textContent: line }),
+      ]),
+    ]));
+  }
+  return card;
+}
+
+async function submitSession() {
+  const st = sess();
+  S.running = true; S.result = null; renderBar();
+  say("Judging…");
+  try {
+    const r = await api("POST", "/api/judge", judgeContext({
+      artifact: st.artifact,
+      attempt: st.attempt,
+      prior_artifacts: priorArtifacts(),
+    }));
+    S.result = r;
+    st.transcript.push({ attempt: st.attempt, artifact: { ...st.artifact }, verdicts: r.verdicts });
+    recordStatus(r.verdicts, S.criteria.criteria, st.attempt);
+
+    const failed = r.verdicts.filter((v) => v.verdict === "FAIL").length;
+    // A missing verdict is not a pass: the judge failed to rule on that criterion.
+    if (failed === 0 && !r.missing_ids.length) {
+      st.passed = true;
+      const nxt = nextPhase();
+      if (nxt) sess(nxt.phase).unlocked = true;
+      say(nxt ? `All criteria passed — ${nxt.label} unlocked.` : "All criteria passed — session complete.", "ok");
+    } else {
+      st.attempt += 1;
+      say(`${failed} of ${r.verdicts.length} criteria failed — now on attempt ${st.attempt}.`, "err");
+    }
+    writeSandbox();
+  } catch (e) {
+    say(e.message, "err");
+  } finally {
+    S.running = false;
+    render();
+  }
+}
+
+// --------------------------------------------------------------------- render
+
+function render() {
+  renderChrome();
+  const views = {
+    session: renderSession, rubric: renderRubric, criteria: renderCriteria,
+    problem: renderProblem, prompt: renderPrompt, run: renderRun,
+  };
+  $("#main").replaceChildren(views[S.tab]());
+  renderBar();
+}
+
+window.addEventListener("beforeunload", (e) => {
+  if (anyDirty()) { e.preventDefault(); e.returnValue = ""; }
+});
+
+(async function start() {
+  try {
+    S.boot = await api("GET", "/api/bootstrap");
+    if (!S.boot.phases.length) throw new Error("No phases found in prompts/phases/.");
+    if (!S.boot.problems.length) throw new Error("No problems found in cases/problems/.");
+    await loadPhase(S.boot.phases[0].phase);
+    await loadProblem(S.boot.problems[0].slug);
+    await loadRubric();
+    render();
+  } catch (e) {
+    document.body.append(el("main", {}, el("div", { className: "card" }, [
+      el("h3", { textContent: "Could not start" }),
+      el("p", { textContent: e.message }),
+    ])));
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+# Criteria for phase.algorithm_design (the "D" of PCDIT).
+#
+# The student is writing a plan a human could follow, not code. Criteria here
+# guard against the two usual failure modes: skipping straight to C, and writing
+# steps so vague that they restate the problem instead of solving it.
+
+id: criteria.algorithm_design
+phase: algorithm_design
+version: 1
+
+criteria:
+  - id: ordered_steps
+    text: The design is a sequence of discrete, ordered steps.
+    guidance: |
+      PASS if the artifact presents steps that are separated and ordered -- numbered,
+      bulleted, or joined by explicit sequencing words ('first', 'then', 'after that').
+      FAIL if the design is one undifferentiated paragraph in which the order of
+      operations cannot be recovered, or if it is a restatement of what the program
+      should achieve rather than how.
+
+  - id: not_c_code
+    text: The steps are written in plain language, not C.
+    guidance: |
+      PASS if a reader who does not know C could follow the steps.
+      FAIL if the artifact is C source or near-source -- semicolon-terminated
+      statements, `for (i = 0; i < n; i++)`, `printf`/`scanf` calls, type
+      declarations, braces used as blocks. Naming a variable, or writing an ordinary
+      arithmetic expression such as 'total / n', is not C code and does not fail.
+
+  - id: inputs_are_consumed
+    text: The steps say how every input is read.
+    guidance: |
+      PASS if the design accounts for reading each input the problem supplies,
+      including repetition where the count is read at runtime ('repeat n times:
+      read the next score').
+      FAIL if the steps begin from data that has appeared out of nowhere, or if a
+      variable-length input is treated as a single read.
+
+  - id: state_is_named
+    text: The values the algorithm must keep track of are identified.
+    guidance: |
+      PASS if the artifact names the quantities carried across steps -- an accumulator,
+      a counter, a running best-so-far, an array -- and it is clear what each holds.
+      FAIL if a step refers to a value ('add it to the total') that no earlier step
+      ever introduced or initialised.
+
+  - id: output_is_produced
+    text: A final step produces the required output in the required form.
+    guidance: |
+      PASS if the last step states what is emitted and matches the output format the
+      problem statement fixes (rounding, decimal places, ordering, wording).
+      FAIL if the design computes an answer but never says it is output, or if it
+      outputs something in a shape the statement does not ask for.

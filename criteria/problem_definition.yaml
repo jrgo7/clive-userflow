@@ -1,0 +1,35 @@
+# Criteria for phase.problem_definition.
+#
+# Edited through the CLive Studio app (`uv run clive-studio`) or by hand.
+# `version` is what cases/suites/*.yaml pins as `criteria_version` -- bump it
+# whenever a criterion's text or guidance changes, so a suite recorded against
+# the old rubric is not silently re-interpreted against the new one.
+
+id: criteria.problem_definition
+phase: problem_definition
+version: 1
+
+criteria:
+  - id: novel_wording
+    text: The summary uses different words than the prompt.
+    guidance: |
+      PASS if the summary restates the task in the student's own phrasing.
+      FAIL if it is largely copied spans from the problem statement, even when reordered.
+      Domain nouns that have no natural synonym (variable names, 'array', 'average')
+      do not count as copying.
+
+  - id: concrete_types
+    text: Types must be specific and concrete.
+    guidance: |
+      PASS if each input and output names a definite type a C programmer could declare --
+      'int', 'float', 'array of 10 ints', 'null-terminated string'.
+      FAIL for vague placeholders such as 'a number', 'some values', 'the data',
+      or a quantity given with no type at all.
+
+  - id: constraints_noted
+    text: Some constraints must be noted, or explicitly described as absent.
+    guidance: |
+      PASS if the artifact states at least one real constraint (value ranges, input size,
+      sign, precision, ordering) OR explicitly says the problem states no constraints.
+      FAIL if constraints are simply never mentioned -- silence is not the same as
+      declaring there are none.

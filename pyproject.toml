@@ -16,7 +16,11 @@ dependencies = [
 ]
 
 [project.scripts]
-clive-userflow = "clive_userflow:main"
+clive-studio = "clive.studio.__main__:main"
+
+[tool.uv.build-backend]
+# The distribution is named clive-userflow but the package is src/clive/.
+module-name = "clive"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
