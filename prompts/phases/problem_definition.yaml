@@ -1,0 +1,138 @@
+# Phase definition: Problem (the "P" of PCDIT).
+#
+# Notes that used to sit inline next to the keys they describe now live up here,
+# because only the leading comment block survives a save from CLive Studio.
+#
+#   model      No `temperature`. Sampling parameters were removed on Sonnet 5 /
+#              Opus 5 / 4.7 / 4.8 and return HTTP 400; buy depth with `effort`
+#              plus adaptive thinking instead. Thinking tokens are drawn from
+#              `max_output_tokens`, so a budget that looks generous for a verdict
+#              list can still truncate it.
+#
+#   artifact_fields
+#              What the student submits. Each entry becomes a form field in the
+#              Studio and a labelled block in the STUDENT ARTIFACT loop below.
+#              Order matters: it is the order the student fills them in.
+#
+#   EARLIER PHASES
+#              Rendered only when the caller passes `prior_artifacts` (the
+#              Sandbox carry-forward toggle). With it absent the block vanishes
+#              and the prompt is byte-identical to v3.
+
+id: phase.problem_definition
+version: 4
+phase: problem_definition
+label: Problem
+order: 1
+created: 2026-08-18
+changelog: >
+  v4: Added `task_description` (the student-facing instructions, shown at the top of
+  a Sandbox session) and an optional EARLIER PHASES block driven by `prior_artifacts`.
+  The block is guarded by `{% if prior_artifacts %}`, so every existing caller — the
+  notebook included — renders exactly what v3 rendered. Added one system-prompt rule
+  covering it: prior-phase work is context, never evidence, since it is student
+  writing and would otherwise be quotable.
+
+  Also restored the v3/v2 changelog and the original `summary, inputs, outputs`
+  field order, both lost in a Studio save that wrote an empty changelog field.
+
+  v3: Added `label`/`order` (how the phase is presented in CLive Studio),
+  `model.id` (the model was previously hardcoded in the notebook), and
+  `artifact_fields` — the declaration of what the student submits for this phase.
+  The STUDENT ARTIFACT block of the template now loops over `artifact_fields`
+  instead of naming summary/inputs/outputs literally, so adding a field in the
+  Studio flows into the prompt without a template edit.
+
+  v2: Removed `temperature` (rejected with HTTP 400 on claude-sonnet-5 and every
+  other current model); depth is now controlled by `effort` + adaptive thinking.
+  Raised max_output_tokens, since thinking tokens count against the same budget.
+  The CRITERIA TO JUDGE loop now emits each criterion's text and guidance rather
+  than its bare id. Expanded the system prompt into an explicit judging contract.
+
+model:
+  id: claude-opus-5
+  effort: medium
+  thinking: adaptive
+  max_output_tokens: 4000
+  response_format: json_schema
+  schema: base/output_schema.json
+
+task_description: |
+  Before you write any code, restate this problem in your own words — two or three
+  sentences explaining the task to a classmate who has not read the statement. Then
+  list every input in the order the program reads it, giving each a definite C type
+  (`int`, `float`, an array of a stated size) along with whatever the statement
+  guarantees about its values — range, sign, count, ordering — or saying explicitly
+  that it guarantees nothing. Finally, state what the program prints and in exactly
+  what form, including any fixed decimal places, rounding, or wording; you are not
+  solving the problem yet, so no algorithm and no code.
+
+artifact_fields:
+  - id: summary
+    label: Summary
+    hint: Restate the task in your own words.
+    rows: 4
+  - id: inputs
+    label: Inputs
+    hint: What the program reads, of what type, and what the statement guarantees about it.
+    rows: 3
+  - id: outputs
+    label: Outputs
+    hint: What the program prints, and in what form.
+    rows: 3
+
+system_prompt: |
+  You are evaluating one student artifact from one phase of a structured problem-solving process. You are not holding a conversation, and you are not teaching C.
+
+  You judge the artifact against a fixed list of criteria. For each criterion you return exactly one verdict.
+
+  Rules:
+  - Return exactly one verdict per criterion id listed under CRITERIA TO JUDGE. Never merge, skip, split, or invent a criterion id.
+  - Judge each criterion only against its own stated text and guidance. A strong artifact can still fail one criterion; do not let a verdict on one criterion pull the others with it.
+  - Judge only what the artifact actually says. Do not credit the student for something a competent reader would infer but the artifact does not state.
+  - Quote evidence verbatim from the student artifact — copy the exact span, do not paraphrase, correct, or reformat it. If nothing in the artifact bears on the criterion, return an empty evidence string and FAIL.
+  - The problem statement and public test cases are context for judging. Never quote them as evidence; evidence must come from the student artifact.
+  - If an EARLIER PHASES section is present, it is also context only. It is this student's own writing from previous phases, which makes it tempting to quote — do not. Evidence must come from the STUDENT ARTIFACT section, and a criterion is failed if only the earlier work satisfies it.
+  - Set confidence to reflect how clearly the artifact settles the criterion, not how confident you are in general. Use "low" when the artifact is ambiguous or the criterion is a borderline call.
+
+user_template: |
+  PROBLEM STATEMENT
+  {{ problem.statement }}
+
+  {% if problem.public_test_cases %}
+  PUBLIC TEST CASES
+  {% for case in problem.public_test_cases %}
+  - input: {{ case.input | tojson }} output: {{ case.output | tojson }}
+  {% endfor %}
+  {% endif %}
+  {% if prior_artifacts %}
+  EARLIER PHASES
+  This student's work from earlier phases, for context. Never quote it as evidence.
+  {% for p in prior_artifacts %}
+  {{ p.label }}:
+  {% for f in p.fields %}
+  - {{ f.label }}: {{ f.value }}
+  {% endfor %}
+  {% endfor %}
+  {% endif %}
+
+  STUDENT ARTIFACT
+  {% for f in artifact_fields %}
+
+  {{ f.label }}:
+  {{ artifact[f.id] | default("(not provided)", true) }}
+  {% endfor %}
+
+  CRITERIA TO JUDGE
+  Return exactly one verdict for each of the following {{ criteria_to_judge | length }} criteria, using the id in brackets.
+  {% for c in criteria_to_judge %}
+  - [{{ c.id }}] {{ c.text }}
+    {{ c.guidance | trim | indent(2) }}
+  {% endfor %}
+
+  ATTEMPT
+  This is submission {{ attempt }} for this phase.
+
+# todo
+examples:
+  -

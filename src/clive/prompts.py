@@ -28,6 +28,9 @@ from clive.config import (
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 
+#: A superseded file, kept beside the current one for the record: `<slug>.v<N>.yaml`.
+ARCHIVE_RE = re.compile(r"\.v\d+$")
+
 
 class ContentError(ValueError):
     """Authored content is missing or malformed. Carries a message meant for the user."""
@@ -46,6 +49,17 @@ def check_slug(value: str, what: str) -> str:
             f"starting with a letter or digit - got {value!r}."
         )
     return value
+
+
+def live_yaml_files(directory: Path) -> list[Path]:
+    """The current version of every authored file in `directory`, sorted by filename.
+
+    Superseded versions stay on disk as `<slug>.v<N>.yaml` so the history of a
+    prompt is readable next to the prompt. They are not selectable content: an id
+    resolves to `<slug>.yaml` (see `phase_path`), so listing an archive hands the
+    caller an id whose file does not exist, and the load fails with `No such file`.
+    """
+    return sorted(p for p in directory.glob("*.yaml") if not ARCHIVE_RE.search(p.stem))
 
 
 # --------------------------------------------------------------------------- io
@@ -133,7 +147,7 @@ def phase_path(phase: str) -> Path:
 def list_phases() -> list[dict]:
     """Every phase, ordered by the `order` field then by filename."""
     phases = []
-    for path in sorted(PHASES_DIR.glob("*.yaml")):
+    for path in live_yaml_files(PHASES_DIR):
         try:
             data = read_yaml(path)
         except ContentError:
@@ -297,7 +311,7 @@ def problem_path(problem_id: str) -> Path:
 
 def list_problems() -> list[dict]:
     problems = []
-    for path in sorted(PROBLEMS_DIR.glob("*.yaml")):
+    for path in live_yaml_files(PROBLEMS_DIR):
         try:
             data = read_yaml(path)
         except ContentError:
