@@ -28,34 +28,9 @@ SUITES_DIR = CASES_DIR / "suites"
 # over a stale one committed to a local .env.
 load_dotenv(REPO_ROOT / ".env", override=False)
 
+#: Which provider the judge call goes to. `clive.providers.get_provider` resolves
+#: this to a concrete provider; per-provider model defaults, model choices, and
+#: API-key env vars live on those classes.
 PROVIDER = os.environ.get("CLIVE_PROVIDER", "anthropic").strip().strip("'\"")
 
-#: Used when a phase YAML does not pin `model.id`.
-DEFAULT_MODEL = "claude-opus-5"
-
-#: Offered in the Studio's model dropdown. Not exhaustive — a phase YAML may
-#: name any model id the provider accepts.
-MODEL_CHOICES = [
-    "claude-opus-5",
-    "claude-sonnet-5",
-    "claude-opus-4-8",
-    "claude-haiku-4-5",
-]
-
 EFFORT_CHOICES = ["low", "medium", "high", "xhigh", "max"]
-
-
-def api_key(provider: str | None = None) -> str | None:
-    """The API key for `provider`, or None if it is not set."""
-    env_var = {
-        "anthropic": "ANTHROPIC_API_KEY",
-        "deepseek": "DEEPSEEK_API_KEY",
-    }.get((provider or PROVIDER).lower())
-    if env_var is None:
-        return None
-    key = os.environ.get(env_var)
-    return key or None
-
-
-def has_api_key(provider: str | None = None) -> bool:
-    return api_key(provider) is not None

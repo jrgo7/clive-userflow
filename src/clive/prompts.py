@@ -21,10 +21,10 @@ import yaml
 from clive.config import (
     BASE_PROMPTS_DIR,
     CRITERIA_DIR,
-    DEFAULT_MODEL,
     PHASES_DIR,
     PROBLEMS_DIR,
 )
+from clive.providers import get_provider
 
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 
@@ -171,7 +171,7 @@ def load_phase(phase: str) -> dict:
     data.setdefault("artifact_fields", [])
     data.setdefault("task_description", "")
     model = data.setdefault("model", {})
-    model.setdefault("id", DEFAULT_MODEL)
+    model.setdefault("id", get_provider().default_model)
     model.setdefault("effort", "medium")
     model.setdefault("max_output_tokens", 4000)
     return data

@@ -2,6 +2,9 @@
 
 Mirrors prompts/base/output_schema.json. The schema file is what the phase YAML
 pins; `JudgeResult` below is what the SDK validates against. Keep the two in step.
+
+The model call itself lives in `clive.providers`, picked by `CLIVE_PROVIDER`.
+This module renders the prompt, hands it to the provider, and audits the reply.
 """
 
 from __future__ import annotations
@@ -12,7 +15,10 @@ from typing import Literal
 from pydantic import BaseModel
 
 from clive import prompts
-from clive.config import DEFAULT_MODEL, has_api_key
+from clive.providers import get_provider
+from clive.providers.base import JudgeError  # re-exported for existing callers
+
+__all__ = ["Verdict", "JudgeResult", "JudgeError", "audit_evidence", "judge"]
 
 
 class Verdict(BaseModel):
@@ -24,10 +30,6 @@ class Verdict(BaseModel):
 
 class JudgeResult(BaseModel):
     verdicts: list[Verdict]
-
-
-class JudgeError(RuntimeError):
-    """A judging run failed for a reason worth showing the user verbatim."""
 
 
 def _normalise(text: str) -> str:
@@ -65,71 +67,39 @@ def judge(
     """
     if not criteria:
         raise JudgeError("This phase has no criteria yet. Add at least one before running.")
-    if not has_api_key("anthropic"):
+
+    provider = get_provider()
+    if not provider.has_api_key():
         raise JudgeError(
-            "No ANTHROPIC_API_KEY in the environment. "
-            "Copy .env.example to .env, set the key, then restart the server."
+            f"No API key for provider {provider.name!r}. Set {provider.api_key_env} in the "
+            "environment. Copy .env.example to .env, set the key, then restart the server."
         )
 
-    try:
-        import anthropic
-    except ModuleNotFoundError:
-        raise JudgeError("The `anthropic` package is not installed. Run `uv sync`.") from None
-
     model_cfg = phase.get("model", {})
-    model_id = model_cfg.get("id") or DEFAULT_MODEL
+    model_id = model_cfg.get("id") or provider.default_model
     user_prompt = prompts.render_user_prompt(
         phase, problem, artifact, criteria, attempt, prior_artifacts
     )
 
-    client = anthropic.Anthropic()
-    try:
-        resp = client.messages.parse(
-            model=model_id,
-            max_tokens=int(model_cfg.get("max_output_tokens", 4000)),
-            system=phase["system_prompt"],
-            messages=[{"role": "user", "content": user_prompt}],
-            thinking={"type": "adaptive"},
-            output_config={"effort": model_cfg.get("effort", "medium")},
-            output_format=JudgeResult,
-        )
-    except anthropic.AuthenticationError:
-        raise JudgeError(
-            "The API key was rejected. Check ANTHROPIC_API_KEY in .env."
-        ) from None
-    except anthropic.NotFoundError:
-        raise JudgeError(
-            f"The model {model_id!r} does not exist or is not available to this key. "
-            "Pick another model in the Prompt tab."
-        ) from None
-    except anthropic.RateLimitError as exc:
-        retry_after = exc.response.headers.get("retry-after", "60")
-        raise JudgeError(f"Rate limited; retry after {retry_after}s.") from None
-    except anthropic.APIStatusError as exc:
-        raise JudgeError(f"API error {exc.status_code}: {exc.message}") from None
-    except anthropic.APIConnectionError:
-        raise JudgeError("Could not reach the API. Check your connection.") from None
+    result = provider.judge_json(
+        system=phase["system_prompt"],
+        user=user_prompt,
+        model=model_id,
+        max_output_tokens=int(model_cfg.get("max_output_tokens", 4000)),
+        effort=model_cfg.get("effort", "medium"),
+        schema=JudgeResult,
+    )
 
-    if resp.stop_reason == "refusal":
-        detail = getattr(resp, "stop_details", None)
-        reason = getattr(detail, "explanation", None) or "no explanation given"
-        raise JudgeError(f"The model declined to answer ({reason}).")
-    if resp.stop_reason == "max_tokens":
-        raise JudgeError(
-            "Response hit max_tokens and the verdict list is truncated. "
-            "Raise max_output_tokens in the Prompt tab, or lower effort."
-        )
-
-    result: JudgeResult = resp.parsed_output
-    quoted = audit_evidence(result.verdicts, artifact)
+    parsed: JudgeResult = result.parsed
+    quoted = audit_evidence(parsed.verdicts, artifact)
     asked = [c["id"] for c in criteria]
-    returned = [v.criterion_id for v in result.verdicts]
+    returned = [v.criterion_id for v in parsed.verdicts]
 
     return {
-        "model": resp.model,
+        "model": result.model,
         "prompt": user_prompt,
         "verdicts": [
-            {**v.model_dump(), "evidence_found": quoted[v.criterion_id]} for v in result.verdicts
+            {**v.model_dump(), "evidence_found": quoted[v.criterion_id]} for v in parsed.verdicts
         ],
         # A judge that invents or drops an id has broken its contract; surfacing it
         # here means a bad prompt edit shows up as a warning instead of silently
@@ -137,7 +107,7 @@ def judge(
         "missing_ids": [cid for cid in asked if cid not in returned],
         "unexpected_ids": [cid for cid in returned if cid not in asked],
         "usage": {
-            "input_tokens": resp.usage.input_tokens,
-            "output_tokens": resp.usage.output_tokens,
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
         },
     }

@@ -16,7 +16,8 @@ from urllib.parse import urlparse
 
 from clive import judge as judging
 from clive import prompts
-from clive.config import EFFORT_CHOICES, MODEL_CHOICES, PROVIDER, has_api_key
+from clive.config import EFFORT_CHOICES
+from clive.providers import get_provider
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -37,13 +38,14 @@ def route(method: str, path: str, body: dict) -> dict:
     parts = [p for p in path.strip("/").split("/") if p]
 
     if parts == ["api", "bootstrap"] and method == "GET":
+        provider = get_provider()
         return {
             "phases": prompts.list_phases(),
             "problems": prompts.list_problems(),
-            "models": MODEL_CHOICES,
+            "models": provider.model_choices,
             "efforts": EFFORT_CHOICES,
-            "provider": PROVIDER,
-            "has_api_key": has_api_key(),
+            "provider": provider.name,
+            "has_api_key": provider.has_api_key(),
         }
 
     if len(parts) == 3 and parts[0] == "api" and parts[1] == "phase":
@@ -300,11 +302,13 @@ def serve(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) 
     httpd = ThreadingHTTPServer((host, port), Handler)
     url = f"http://{host}:{port}/"
 
+    provider = get_provider()
     print(f"CLive Studio  {url}")
+    print(f"  provider: {provider.name}")
     print(f"  phases:   {', '.join(p['label'] for p in prompts.list_phases())}")
     print(f"  problems: {len(prompts.list_problems())}")
-    if not has_api_key():
-        print("  note:     no ANTHROPIC_API_KEY set - editing works, Run will not.")
+    if not provider.has_api_key():
+        print(f"  note:     no {provider.api_key_env} set - editing works, Run will not.")
     print("  Ctrl-C to stop.\n")
 
     if open_browser:
