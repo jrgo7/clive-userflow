@@ -18,6 +18,12 @@ uv run clive-studio       # opens http://127.0.0.1:8765
 `--port N` to move it, `--no-browser` to stop it opening a window. Editing works without
 an API key; only the Run tab needs one.
 
+**Provider.** The judge call goes to Anthropic by default. Set `CLIVE_PROVIDER=deepseek`
+in `.env` (with `DEEPSEEK_API_KEY`) to send it to DeepSeek instead — the model dropdown and
+the key pill follow the choice. DeepSeek has no `effort` or thinking knob; pick
+`deepseek-reasoner` in the Prompt tab when you want reasoning. Each provider lives in
+`src/clive/providers/`; adding a third is a new file plus a `REGISTRY` entry.
+
 The Studio is a thin editor over the YAML in this repo — every save writes the same file a
 human would hand-edit, comments at the top of the file included. Nothing is stored anywhere
 else, so the notebooks, the Studio, and `git diff` never disagree.
@@ -108,6 +114,7 @@ cases/problems/<slug>.yaml    problem statements and public test cases
 cases/suites/<phase>.yaml     regression fixtures pinning expected verdicts
 notebooks/                    the walkthrough
 src/clive/                    prompts.py (load/render/save), judge.py (the call), studio/ (the app)
+src/clive/providers/          one file per model vendor; CLIVE_PROVIDER picks which the judge uses
 ```
 
 ## Conventions

@@ -153,6 +153,28 @@ def test_judge_json_skips_json_mode_for_reasoner(deepseek):
     assert "response_format" not in sink
 
 
+def test_judge_json_appends_target_schema_to_system_prompt(deepseek):
+    provider, install = deepseek
+    sink = install(VALID_RESULT)
+    _call(provider, model="deepseek-chat")
+    system = sink["messages"][0]["content"]
+    # The phase system_prompt ("sys") is kept, and the JudgeResult shape is spelled
+    # out after it — DeepSeek is never told the shape by the API.
+    assert system.startswith("sys")
+    assert '"verdicts"' in system and '"criterion_id"' in system
+    # Also satisfies json_object mode's "prompt must contain 'json'" rule.
+    assert "json" in system.lower()
+
+
+def test_judge_json_appends_schema_for_reasoner_too(deepseek):
+    provider, install = deepseek
+    sink = install(VALID_RESULT)
+    _call(provider, model="deepseek-reasoner")
+    # reasoner skips response_format but still needs the shape described.
+    assert "response_format" not in sink
+    assert '"verdicts"' in sink["messages"][0]["content"]
+
+
 def test_judge_json_malformed_content_raises_judge_error(deepseek):
     provider, install = deepseek
     install("sorry, no JSON here")

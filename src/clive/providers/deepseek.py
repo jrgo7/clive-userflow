@@ -3,15 +3,19 @@
 DeepSeek's API is OpenAI-compatible but has no schema-enforced structured
 output and no `effort` / adaptive-thinking knob. `deepseek-chat` supports JSON
 mode (`response_format={"type": "json_object"}`); `deepseek-reasoner` rejects
-that parameter, so for it we rely on the preamble's "Return JSON only"
-instruction plus `_extract_json` to peel off any fences or stray prose. Reply
-validation is done here against the pydantic schema.
+that parameter, so for it we rely on `_extract_json` to peel off any fences or
+stray prose. Neither model is told the reply *shape* by the API, so we append
+the target JSON Schema to the system prompt; without it the model invents its
+own layout and the reply fails to validate. Reply validation is done here
+against the pydantic schema.
 
 Reasoning depth is chosen by pinning `model.id: deepseek-reasoner` in the phase
 YAML — there is no `effort` lever to pull.
 """
 
 from __future__ import annotations
+
+import json
 
 import pydantic
 from pydantic import BaseModel
@@ -52,6 +56,16 @@ class DeepSeekProvider(Provider):
                 {"role": "user", "content": user},
             ],
         }
+        # DeepSeek has no schema-enforced structured output: the API guarantees
+        # (at most) syntactically valid JSON, never a particular shape. Spell the
+        # shape out in the system prompt or the reply won't parse against
+        # `schema`. This also satisfies json_object mode's rule that the word
+        # "json" appear somewhere in the prompt.
+        kwargs["messages"][0]["content"] += (
+            "\n\nReturn a single JSON object matching this JSON Schema exactly: "
+            "every required key present, no extra or renamed keys, no prose, no "
+            "code fences.\n" + json.dumps(schema.model_json_schema(), indent=2)
+        )
         # json_object mode is unsupported on deepseek-reasoner.
         if not model.startswith("deepseek-reasoner"):
             kwargs["response_format"] = {"type": "json_object"}
