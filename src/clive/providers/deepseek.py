@@ -30,6 +30,7 @@ class DeepSeekProvider(Provider):
     default_model = "deepseek-chat"
     model_choices = ["deepseek-chat", "deepseek-reasoner"]
     api_key_env = "DEEPSEEK_API_KEY"
+    model_prefixes = ("deepseek-",)
 
     def judge_json(
         self,

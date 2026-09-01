@@ -1,10 +1,18 @@
 id: phase.algorithm_design
-version: 2
+version: 3
 phase: algorithm_design
 label: Design
 order: 3
 created: 2026-08-20
 changelog: >
+  v3: Judge model moved from `claude-opus-5` to `deepseek-v4-pro`, so this phase
+  runs off `DEEPSEEK_API_KEY` like `problem_definition` and `case_design` rather
+  than needing an Anthropic key. `judge()` now routes the provider from
+  `model.id` (a `deepseek-*` id reaches DeepSeek even when `CLIVE_PROVIDER` is
+  unset), so no other config changes. `max_output_tokens` raised 4000 -> 8000:
+  the artifact-fields pilot showed `deepseek-v4-pro` truncating the 5-criterion
+  verdict list at 4000 on this phase.
+
   v2: Added `task_description` (student-facing instructions, shown at the top of a
   Sandbox session) and an optional EARLIER PHASES block driven by `prior_artifacts`.
   The block is guarded by `{% if prior_artifacts %}`, so a caller that passes nothing
@@ -19,10 +27,10 @@ changelog: >
   this phase judges whether the plan is followable, not whether it is optimal.
 
 model:
-  id: claude-opus-5
+  id: deepseek-v4-pro
   effort: medium
   thinking: adaptive
-  max_output_tokens: 4000
+  max_output_tokens: 8000
   response_format: json_schema
   schema: base/output_schema.json
 

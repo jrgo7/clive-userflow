@@ -2,6 +2,25 @@
 
 > Please update this file whenever prompts are changed by documenting why each version changed.
 
+## algorithm_design v2 -> v3: judge model to deepseek-v4-pro - 2026-09-02
+
+**`model.id` moved from `claude-opus-5` to `deepseek-v4-pro`.** This phase was the only one
+still pinned to Anthropic, so running it needed an Anthropic key alongside the DeepSeek one the
+other two phases use. It now runs off `DEEPSEEK_API_KEY` like `problem_definition` and
+`case_design`. Enabled by a `judge()` change: the provider is now resolved from the phase's
+`model.id` (`get_provider(model=...)`, matching `Provider.model_prefixes`), falling back to
+`CLIVE_PROVIDER`, so a `deepseek-*` id reaches DeepSeek with no env change.
+
+**`max_output_tokens` raised 4000 -> 8000.** The artifact-fields pilot
+(`docs/artifact-fields-pilot-results.md`) showed `deepseek-v4-pro` truncating this phase's
+five-criterion verdict list at 4000. `problem_definition` and `case_design` (three criteria,
+still on `deepseek-chat`) are unaffected and keep 4000.
+
+**Why `deepseek-v4-pro`, not `deepseek-chat`.** The pilot found `deepseek-chat` (which resolves
+to `deepseek-v4-flash`) does not reliably compute — it accepted a planted wrong worked example
+in every `case_design` layout. `deepseek-v4-pro` caught it. `algorithm_design` does not hinge
+on arithmetic, but the reliability gap argued for the stronger model here too.
+
 ## Sandbox support: problem_definition v3 -> v4, case_design and algorithm_design v1 -> v2 - 2026-08-20
 
 **`task_description` added to every phase.** The phases described what the *judge* should do

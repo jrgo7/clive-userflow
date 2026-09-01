@@ -3,8 +3,9 @@
 Mirrors prompts/base/output_schema.json. The schema file is what the phase YAML
 pins; `JudgeResult` below is what the SDK validates against. Keep the two in step.
 
-The model call itself lives in `clive.providers`, picked by `CLIVE_PROVIDER`.
-This module renders the prompt, hands it to the provider, and audits the reply.
+The model call itself lives in `clive.providers`, picked from the phase's
+`model.id` (falling back to `CLIVE_PROVIDER`). This module renders the prompt,
+hands it to the provider, and audits the reply.
 """
 
 from __future__ import annotations
@@ -68,15 +69,15 @@ def judge(
     if not criteria:
         raise JudgeError("This phase has no criteria yet. Add at least one before running.")
 
-    provider = get_provider()
+    model_cfg = phase.get("model", {})
+    model_id = model_cfg.get("id")
+    provider = get_provider(model=model_id)
     if not provider.has_api_key():
         raise JudgeError(
             f"No API key for provider {provider.name!r}. Set {provider.api_key_env} in the "
             "environment. Copy .env.example to .env, set the key, then restart the server."
         )
-
-    model_cfg = phase.get("model", {})
-    model_id = model_cfg.get("id") or provider.default_model
+    model_id = model_id or provider.default_model
     user_prompt = prompts.render_user_prompt(
         phase, problem, artifact, criteria, attempt, prior_artifacts
     )

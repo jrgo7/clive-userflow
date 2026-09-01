@@ -36,6 +36,36 @@ def test_get_provider_unknown_name_lists_valid():
         assert name in str(exc.value)
 
 
+def test_owns_model():
+    assert AnthropicProvider.owns_model("claude-opus-5")
+    assert AnthropicProvider.owns_model("claude-sonnet-9-future")  # prefix, not just the list
+    assert not AnthropicProvider.owns_model("deepseek-chat")
+    assert DeepSeekProvider.owns_model("deepseek-chat")
+    assert DeepSeekProvider.owns_model("deepseek-v4-pro")  # not in model_choices
+    assert not DeepSeekProvider.owns_model("claude-opus-5")
+    assert not DeepSeekProvider.owns_model("")
+
+
+def test_get_provider_routes_by_model():
+    assert isinstance(get_provider(model="claude-opus-5"), AnthropicProvider)
+    assert isinstance(get_provider(model="deepseek-v4-pro"), DeepSeekProvider)
+    assert isinstance(get_provider(model="deepseek-chat"), DeepSeekProvider)
+
+
+def test_get_provider_model_routing_overrides_config(monkeypatch):
+    monkeypatch.setattr(config, "PROVIDER", "deepseek")
+    assert isinstance(get_provider(model="claude-opus-5"), AnthropicProvider)
+
+
+def test_get_provider_explicit_name_beats_model():
+    assert isinstance(get_provider("deepseek", model="claude-opus-5"), DeepSeekProvider)
+
+
+def test_get_provider_unknown_model_falls_back_to_config(monkeypatch):
+    monkeypatch.setattr(config, "PROVIDER", "anthropic")
+    assert isinstance(get_provider(model="gpt-5-turbo"), AnthropicProvider)
+
+
 # ----------------------------------------------------------------------- api key
 
 
