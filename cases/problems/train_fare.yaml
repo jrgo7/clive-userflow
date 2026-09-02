@@ -1,0 +1,28 @@
+id: problem.train_fare
+title: Train Fare
+difficulty: introductory
+topics:
+- conditionals
+- arithmetic
+- floating-point
+statement: |
+  Assume a single train line with 25 stations, referred to by the numbers 1 to 25.
+
+  The fare for a ride is computed as follows. There is a fixed base fare of 20 pesos for the
+  first three stations, not counting the station you entered at. After that, every additional
+  station adds 2.50 pesos to the fare.
+
+  Ask the user to enter two integers: the station where they got on, and then the station
+  where they got off. Compute and display the total fare, rounded off to two decimal places.
+
+  The entry and exit stations are always different, although the ride can go in either
+  direction. Both are whole numbers between 1 and 25 inclusive.
+public_test_cases:
+- input: 3 12
+  output: '35.00'
+- input: 1 4
+  output: '20.00'
+- input: 1 5
+  output: '22.50'
+- input: 25 1
+  output: '72.50'

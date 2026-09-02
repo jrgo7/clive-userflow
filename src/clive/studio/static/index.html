@@ -59,6 +59,57 @@ header {
   background: var(--panel-2); color: var(--ink-2); border: 1px solid var(--line);
 }
 .pill.bad { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+a.mini { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* ---- simulate ------------------------------------------------------------ */
+/* The transcript is a timeline, so it reads down a rule with each step hung off it. */
+.sim-log { border-left: 2px solid var(--line); margin: 4px 0 0 7px; padding: 0 0 0 18px; }
+.sim-step { position: relative; padding: 10px 0; }
+.sim-step::before {
+  content: ""; position: absolute; left: -25px; top: 16px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--panel); border: 2px solid var(--line-2, var(--line));
+}
+.sim-step.is-phase::before { background: var(--accent); border-color: var(--accent); }
+.sim-step.is-pass::before  { background: var(--pass);   border-color: var(--pass); }
+.sim-step.is-fail::before  { background: var(--fail);   border-color: var(--fail); }
+.sim-step.is-nudge::before { background: var(--fail);   border-color: var(--panel); }
+.sim-step .when {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-2);
+}
+.sim-step h4 { margin: 2px 0 0; font-size: 14.5px; }
+.sim-step.is-phase h4 { font-size: 16px; color: var(--accent); }
+.sim-work { display: flex; align-items: center; gap: 9px; color: var(--ink-2); font-size: 13px; }
+.sim-work .dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+  animation: simpulse 1.1s ease-in-out infinite;
+}
+@keyframes simpulse { 0%,100% { opacity: .25; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sim-work .dot { animation: none; opacity: .7; } }
+.sim-art { margin-top: 8px; display: grid; gap: 8px; }
+.sim-art .box { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; }
+.sim-art .box b { display: block; font-size: 11.5px; color: var(--ink-2); font-weight: 600; margin-bottom: 3px; }
+.sim-art .box div { white-space: pre-wrap; font-size: 13.5px; }
+.sim-tally { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.sim-chip {
+  font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 5px;
+  border: 1px solid var(--line); color: var(--ink-2);
+}
+.sim-chip.met  { background: var(--pass-bg); color: var(--pass); border-color: transparent; }
+.sim-chip.block{ background: var(--fail-bg); color: var(--fail); border-color: transparent; }
+.sim-chip.adv  { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+.sim-nudge { margin-top: 8px; border-left: 3px solid var(--fail); background: var(--panel-2);
+             border-radius: 0 8px 8px 0; padding: 10px 13px; }
+.sim-nudge .sum { font-size: 14px; margin-bottom: 6px; }
+.sim-nudge .focus { font-family: var(--mono); font-size: 11.5px; color: var(--fail); }
+.sim-nudge .body { font-size: 13.5px; margin-top: 6px; white-space: pre-wrap; }
+.sim-done { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-top: 12px; }
+.sim-done.ok { background: var(--pass-bg); border-color: transparent; }
+.sim-done.no { background: var(--fail-bg); border-color: transparent; }
+.sim-done h4 { margin: 0 0 6px; font-size: 15px; }
+.sim-done .cost { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); margin-top: 8px; }
+.persona-blurb { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; max-width: 70ch; }
 
 nav.phases { display: flex; gap: 6px; }
 nav.phases button {
@@ -106,6 +157,8 @@ button.mini {
   font: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; cursor: pointer;
   border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2);
 }
+/* A pressed state for mini buttons used as a segmented choice, not an action. */
+button.mini.on { border-color: var(--accent); color: var(--accent); background: transparent; }
 
 .item { border: 1px solid var(--line); border-radius: 9px; padding: 12px; margin-bottom: 10px; background: var(--panel-2); }
 .item .head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
@@ -148,6 +201,20 @@ pre.preview {
 .hint-card .points-at { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
                         font-size: 12.5px; color: var(--ink-2); }
 .hint-card .cid { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+/* A nudge is the same shape as a hint but about a failure, so it borrows the layout
+   and only changes the accent that says which of the two you are reading. */
+.nudge-card { border-left: 3px solid var(--fail); }
+.nudge-card .summary { font-size: 15px; line-height: 1.45; margin-bottom: 12px; }
+.nudge-card .outstanding { margin: 0 0 12px; padding: 0; list-style: none;
+                           font-size: 12.5px; color: var(--ink-2); }
+.nudge-card .outstanding li { padding: 4px 0; border-bottom: 1px solid var(--line); }
+.nudge-card .outstanding li:last-child { border-bottom: 0; }
+.nudge-card .outstanding .cid { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.nudge-card .outstanding li.focus { color: var(--ink); }
+.nudge-card .start-here { font-size: 11px; letter-spacing: .3px; text-transform: uppercase;
+                          color: var(--fail); margin-left: 6px; }
+.nudge-card .body { white-space: pre-wrap; }
+.nudge-card .reason { font-size: 12.5px; color: var(--ink-2); margin-top: 8px; }
 .empty { color: var(--ink-2); font-style: italic; padding: 6px 0; }
 .hint { color: var(--ink-2); font-size: 12px; margin-top: 4px; }
 .tag { font-family: var(--mono); font-size: 12px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
@@ -196,6 +263,10 @@ pre.preview {
   <div class="pill" id="tallyPill" title="Across every phase, for the current problem"></div>
   <div class="pill sandbox" id="modePill" hidden>Sandbox — nothing is written to disk</div>
   <button class="mini" id="modeToggle">…</button>
+  <!-- The student view. Not a tab: it is a different app for a different person,
+       and opening it in a new tab keeps an authoring session from being lost. -->
+  <a class="mini" href="/student" target="_blank" rel="noopener"
+     title="What a student sees — judged against the saved files, never the sandbox">Student view</a>
   <div class="pill" id="keyPill">…</div>
 </header>
 
@@ -217,6 +288,13 @@ const TABS = [
   { id: "problem",  label: "Problem" },
   { id: "prompt",   label: "Prompt" },
   { id: "run",      label: "Run", filesOnly: true },
+  // Cross-phase, like Rubric: a simulation walks every phase, so it is not about
+  // the one selected in the phase strip. Files-only — a run judges the saved
+  // rubric, which is the thing it exists to tell you about.
+  { id: "simulate", label: "Simulate", filesOnly: true },
+  // Read-only: personas are authored in prompts/base/personas.yaml. This is where
+  // you read what a character actually gets sent, which a template cannot show you.
+  { id: "personas", label: "Personas", filesOnly: true },
 ];
 
 const S = {
@@ -225,7 +303,14 @@ const S = {
   problemSlug: null, problem: null,
   tab: "criteria",
   dirty: { criteria: false, problem: false, prompt: false },
-  preview: null, result: null, running: false, hinting: false,
+  preview: null, result: null, running: false, hinting: false, nudging: false,
+  // The simulation: the persona roster, the live event log, and the EventSource
+  // while one is running. `sim.es` being non-null is what "a run is in flight" means.
+  personas: null, personasLoading: false, simCap: 8, personaDoc: null,
+  // Personas tab: which character is open, which prompt shape is shown, and the
+  // rendered prompt once the server has returned it.
+  pv: { open: null, stage: "first", prompt: null, loading: false, error: null },
+  sim: { es: null, events: [], persona: null, attempts: 3, error: null },
   // "files": S.phase / S.criteria / S.problem come from the server and saves write
   // YAML. "sandbox": they are references into S.sandbox and nothing touches disk.
   // The editors are identical either way — only the source and the save differ.
@@ -663,7 +748,7 @@ function renderBar() {
   if (S.tab === "problem") kids.push(saveButton("problem", saveProblem));
   if (S.tab === "prompt") kids.push(saveButton("prompt", savePhase));
   if (S.tab === "run" || S.tab === "session") {
-    const busy = S.running || S.hinting;
+    const busy = S.running || S.hinting || S.nudging;
     if (S.tab === "session") {
       // A hint reads the artifact, not the verdicts, so it is offered from the first
       // moment the form is on screen rather than only after a failed submit.
@@ -985,6 +1070,24 @@ function renderPrompt() {
     field("changelog (why this version differs from the last)",
       textArea(ph.changelog || "", (v) => { ph.changelog = v; markDirty("prompt"); }, 3)),
   ]));
+
+  // Student-facing instructions. Its own card, and above the two model-facing blocks
+  // further down, because it is the only text on this tab the judge never sees —
+  // sitting it beside the system prompt is what would invite editing one for the other.
+  const taskCard = el("div", { className: "card" }, [
+    el("h3", { textContent: "Task description" }),
+    el("p", {
+      className: "sub",
+      textContent: "What the student reads at the top of this phase, in the student view and in a Session. "
+        + "Read by people and never sent to the model, so editing it cannot make a stored verdict stale.",
+    }),
+    textArea(ph.task_description || "", (v) => { ph.task_description = v; markDirty("prompt"); }, 8),
+  ]);
+  if (!(ph.task_description || "").trim()) {
+    taskCard.append(el("div", { className: "note warn", style: "margin-top:10px", textContent:
+      "Empty — the student is shown the form with no instructions for this phase." }));
+  }
+  out.append(taskCard);
 
   // artifact fields
   const fields = ph.artifact_fields || (ph.artifact_fields = []);
@@ -1450,6 +1553,13 @@ function renderSession() {
   out.append(form);
 
   if (st.hint) out.append(renderHint(st.hint));
+  if (st.nudge) out.append(renderNudge(st.nudge));
+  else if (S.nudging) {
+    out.append(el("div", { className: "card nudge-card" }, [
+      el("h3", { textContent: "What is holding you here" }),
+      el("p", { className: "empty", textContent: "Working out where to start…" }),
+    ]));
+  }
   if (S.result) out.append(renderResult(S.result));
   if (st.transcript.length > 1 || (st.transcript.length === 1 && !S.result)) {
     out.append(renderTranscript(st));
@@ -1497,6 +1607,61 @@ function renderHint(h) {
   return card;
 }
 
+function renderNudge(n) {
+  const card = el("div", { className: "card nudge-card" }, [
+    el("h3", { textContent: "What is holding you here" }),
+    el("div", { className: "summary", textContent: n.summary }),
+  ]);
+
+  // Every failing gate, listed from the server's own set rather than from the summary
+  // prose. A model that forgets to mention one still cannot hide it from the student.
+  const list = el("ul", { className: "outstanding" });
+  for (const f of n.failing) {
+    const focus = f.id === n.focus_id;
+    const head = el("span", { className: "cid", textContent: f.id });
+    if (focus) head.append(el("span", { className: "start-here", textContent: "start here" }));
+    list.append(el("li", { className: focus ? "focus" : "" }, [
+      head, el("div", { textContent: f.text }),
+    ]));
+  }
+  card.append(list);
+
+  card.append(el("div", { className: "body", textContent: n.nudge }));
+  card.append(el("div", { className: "reason", textContent: `Why this one first: ${n.reason}` }));
+
+  const dismiss = el("button", { className: "mini", textContent: "Dismiss" });
+  dismiss.onclick = () => { sess().nudge = null; writeSandbox(); render(); };
+  card.append(el("div", { style: "margin-top:10px" }, [dismiss]));
+  return card;
+}
+
+/** Fetch the nudge for a submission that just failed its gates.
+ *
+ * Pushed, not asked for: a student who has just been told they did not pass should not
+ * have to go looking for where to start. It runs after the verdicts are already stored
+ * and rendered, and a failure here only clears the nudge — the judge result stands on
+ * its own, so a nudge call that errors costs the student nothing but the nudge.
+ */
+async function fetchNudge(st, verdicts) {
+  S.nudging = true; renderBar();
+  try {
+    st.nudge = await api("POST", "/api/nudge", judgeContext({
+      artifact: st.artifact,
+      attempt: st.attempt - 1,  // the attempt that was judged, not the one now open
+      verdicts,
+      prior_artifacts: priorArtifacts(),
+      history: [],
+    }));
+  } catch (e) {
+    st.nudge = null;
+    say(`Verdicts are in, but the nudge failed: ${e.message}`, "err");
+  } finally {
+    S.nudging = false;
+    writeSandbox();
+    render();
+  }
+}
+
 async function askHint() {
   const st = sess();
   S.hinting = true; renderBar();
@@ -1526,6 +1691,10 @@ async function submitSession() {
   const st = sess();
   S.running = true; S.result = null; renderBar();
   say("Judging…");
+  // Set when the judge comes back with failing gates, and acted on after the verdicts
+  // are rendered: the student reads what did not pass while the nudge is still being
+  // written, rather than watching one spinner for both calls.
+  let nudgeOn = null;
   try {
     const r = await api("POST", "/api/judge", judgeContext({
       artifact: st.artifact,
@@ -1534,7 +1703,8 @@ async function submitSession() {
     }));
     S.result = r;
     st.transcript.push({ attempt: st.attempt, artifact: { ...st.artifact }, verdicts: r.verdicts });
-    st.hint = null;  // it was about the artifact as it stood before this submission
+    st.hint = null;   // it was about the artifact as it stood before this submission
+    st.nudge = null;  // and so was any nudge: this run's verdicts supersede it
     recordStatus(r.verdicts, S.criteria.criteria, st.attempt);
 
     // Only a gating criterion holds the student here. An advisory FAIL is judged,
@@ -1557,6 +1727,12 @@ async function submitSession() {
       const advisory = failed.length - blocking.length;
       const extra = advisory ? ` (${advisory} advisory, not blocking)` : "";
       say(`${blocking.length} of ${r.verdicts.length} criteria failed${extra} — now on attempt ${st.attempt}.`, "err");
+
+      // A failed gate earns a nudge without being asked for. Only gates the judge
+      // actually ruled FAIL on can be nudged at, so a run held up solely by
+      // `missing_ids` — a broken judge contract, not the student's doing — is left
+      // alone rather than sent to a call that would refuse it.
+      if (blocking.length) nudgeOn = r.verdicts;
     }
     writeSandbox();
   } catch (e) {
@@ -1564,6 +1740,375 @@ async function submitSession() {
   } finally {
     S.running = false;
     render();
+  }
+  if (nudgeOn) await fetchNudge(st, nudgeOn);
+}
+
+// ------------------------------------------------------------------- simulate
+
+/* A persona walks the whole session while you watch. The judge, the nudge and the
+ * gating are the real ones against the saved rubric — only the student is synthetic.
+ *
+ * The transport is Server-Sent Events, which matters for one reason worth stating
+ * plainly: an EventSource reconnects by itself when a stream closes, and a reconnect
+ * here would silently start a second run and bill for it. So the terminal event closes
+ * the socket explicitly, and `simStop` is the only way the connection ever ends.
+ */
+function renderSimulate() {
+  const out = el("div");
+
+  if (S.personas === null) {
+    if (!S.personasLoading) {
+      S.personasLoading = true;
+      api("GET", "/api/personas")
+        .then((d) => {
+          S.personas = d.personas; S.simCap = d.max_attempts_cap;
+          S.personaDoc = { system_prompt: d.system_prompt, model: d.model, version: d.version };
+        })
+        .catch((e) => { S.personas = []; S.sim.error = e.message; })
+        .finally(() => { S.personasLoading = false; render(); });
+    }
+    out.append(el("div", { className: "card" },
+      el("p", { className: "empty", textContent: "Loading personas…" })));
+    return out;
+  }
+
+  out.append(simControls());
+  if (S.sim.error) {
+    out.append(el("div", { className: "card" },
+      el("div", { className: "note warn", textContent: S.sim.error })));
+  }
+  if (S.sim.events.length) out.append(renderSimLog());
+  return out;
+}
+
+function simControls() {
+  const running = !!S.sim.es;
+  const chosen = S.sim.persona || (S.personas[0] && S.personas[0].id);
+
+  const pick = el("select");
+  for (const p of S.personas) {
+    const o = el("option", { value: p.id, textContent: p.name });
+    if (p.id === chosen) o.selected = true;
+    pick.append(o);
+  }
+  pick.disabled = running;
+  pick.onchange = () => { S.sim.persona = pick.value; render(); };
+
+  const attempts = textInput(S.sim.attempts, (v) => { S.sim.attempts = Math.max(1, Number(v) || 1); },
+    { type: "number" });
+  attempts.disabled = running;
+  // Re-render on commit rather than per keystroke: the estimate below depends on this
+  // value, and re-rendering on input would take the focus out of the box mid-number.
+  attempts.onchange = () => render();
+
+  const problems = problemPicker(async (slug) => { await loadProblem(slug); render(); });
+  problems.disabled = running;
+
+  const go = el("button", { className: "act", disabled: running || !S.boot.has_api_key,
+    textContent: running ? "Running…" : "Run simulation" });
+  go.onclick = simStart;
+  const stop = el("button", { className: "act ghost", textContent: "Stop" });
+  stop.onclick = () => simStop("Stopped.");
+
+  const card = el("div", { className: "card" }, [
+    el("h3", { textContent: "Simulate a student" }),
+    el("p", { className: "sub", textContent:
+      "An LLM plays a student and works this problem through every phase. The judge, the nudge and "
+      + "the gating are the real ones running against the saved criteria — only the student is synthetic. "
+      + "A phase that is never passed stops the run, exactly as it would for a real student." }),
+    el("div", { className: "row" }, [
+      field("Persona", pick),
+      field("Problem", problems),
+      field("Attempts per phase", attempts, `Capped at ${S.simCap || 8}.`),
+    ]),
+  ]);
+
+  const who = S.personas.find((p) => p.id === chosen);
+  if (who) card.append(el("div", { className: "persona-blurb", textContent: who.blurb }));
+
+  const buttons = el("div", { className: "row", style: "margin-top:12px" }, [go]);
+  if (running) buttons.append(stop);
+  card.append(buttons);
+
+  if (!S.boot.has_api_key) {
+    card.append(el("div", { className: "note warn", style: "margin-top:10px",
+      textContent: "No API key set — a simulation is nothing but model calls, so this needs one." }));
+  } else if (!running) {
+    // Every attempt is up to three calls: the student writes, the judge rules, the nudge
+    // answers. Worth saying out loud before someone sets attempts to 8.
+    const worst = S.boot.phases.length * Math.max(1, S.sim.attempts) * 3;
+    card.append(el("div", { className: "sub", style: "margin-top:10px",
+      textContent: `Up to ${worst} model calls if nothing passes first time `
+        + `(${S.boot.phases.length} phases × ${S.sim.attempts} attempts × write/judge/nudge).` }));
+  }
+  return card;
+}
+
+function simStart() {
+  const persona = S.sim.persona || (S.personas[0] && S.personas[0].id);
+  if (!persona) { say("No personas are defined.", "err"); return; }
+  simStop();
+  S.sim = { es: null, events: [], persona, attempts: S.sim.attempts, error: null };
+
+  const q = new URLSearchParams({
+    persona, problem: S.problemSlug, attempts: String(S.sim.attempts),
+  });
+  const es = new EventSource(`/api/simulate?${q}`);
+  S.sim.es = es;
+  let terminated = false;
+
+  es.onmessage = (m) => {
+    let ev;
+    try { ev = JSON.parse(m.data); } catch { return; }
+    S.sim.events.push(ev);
+    // The stream is about to close on its own; closing first is what stops the browser
+    // reconnecting and starting a second run.
+    if (ev.type === "done" || (ev.type === "error" && ev.fatal)) {
+      terminated = true;
+      simStop();
+      return;
+    }
+    if (S.tab === "simulate") render();
+  };
+  es.onerror = () => {
+    if (!terminated) S.sim.error = "The connection to the run dropped. Nothing above is lost; start again to continue.";
+    simStop();
+  };
+
+  say(`Simulating ${persona} on ${S.problemSlug}…`);
+  render();
+}
+
+function simStop(msg) {
+  if (S.sim.es) { S.sim.es.close(); S.sim.es = null; }
+  if (msg) say(msg, "ok");
+  if (S.tab === "simulate") render(); else renderBar();
+}
+
+function renderSimLog() {
+  const log = el("div", { className: "sim-log" });
+  for (const ev of S.sim.events) {
+    const node = simStep(ev);
+    if (node) log.append(node);
+  }
+  const card = el("div", { className: "card" }, [el("h3", { textContent: "Transcript" }), log]);
+  return card;
+}
+
+function simStep(ev) {
+  const step = (cls, kids) => el("div", { className: `sim-step ${cls}` }, kids);
+  const when = (t) => el("div", { className: "when", textContent: t });
+
+  if (ev.type === "start") {
+    return step("is-phase", [
+      when(`${ev.persona.name} · ${ev.problem.title}`),
+      el("h4", { textContent: `${ev.phases.length} phases, up to ${ev.max_attempts} attempts each` }),
+    ]);
+  }
+  if (ev.type === "phase_start") {
+    return step("is-phase", [
+      when(`Phase ${ev.index + 1} of ${ev.total}`),
+      el("h4", { textContent: ev.label }),
+    ]);
+  }
+  if (ev.type === "working") {
+    // Only while it is still the newest event — once the result lands it is noise.
+    if (S.sim.events[S.sim.events.length - 1] !== ev) return null;
+    const what = { writing: "The student is writing…", judging: "Judging against every criterion…",
+                   nudging: "Working out what to say next…" }[ev.what] || "Working…";
+    return step("", el("div", { className: "sim-work" }, [el("span", { className: "dot" }), el("span", { textContent: what })]));
+  }
+  if (ev.type === "artifact") {
+    const boxes = el("div", { className: "sim-art" });
+    for (const f of ev.fields) {
+      boxes.append(el("div", { className: "box" }, [
+        el("b", { textContent: f.label }),
+        el("div", { textContent: f.value || "(left empty)" }),
+      ]));
+    }
+    return step("", [when(`Attempt ${ev.attempt} — submitted`), boxes]);
+  }
+  if (ev.type === "verdicts") {
+    const tally = el("div", { className: "sim-tally" });
+    for (const v of ev.verdicts) {
+      const cls = v.verdict === "PASS" ? "met" : v.gate === "advisory" ? "adv" : "block";
+      tally.append(el("span", { className: `sim-chip ${cls}`, textContent: v.criterion_id }));
+    }
+    const adv = ev.advisory_unmet.length;
+    const head = ev.passed
+      ? "Passed" + (adv ? ` — ${adv} advisory not met` : "")
+      : `${ev.blocking.length} blocking${adv ? `, ${adv} advisory` : ""}`;
+    const kids = [when(`Attempt ${ev.attempt} — judged`), el("h4", { textContent: head }), tally];
+    if (ev.missing_ids.length) {
+      kids.push(el("div", { className: "note warn", style: "margin-top:8px",
+        textContent: `The judge returned no verdict for: ${ev.missing_ids.join(", ")}` }));
+    }
+    return step(ev.passed ? "is-pass" : "is-fail", kids);
+  }
+  if (ev.type === "nudge") {
+    const box = el("div", { className: "sim-nudge" }, [
+      el("div", { className: "sum", textContent: ev.summary }),
+      el("div", { className: "focus", textContent: `start here → ${ev.focus_id}` }),
+      el("div", { className: "body", textContent: ev.nudge }),
+    ]);
+    return step("is-nudge", [when("Told to fix one thing"), box]);
+  }
+  if (ev.type === "phase_done") {
+    return step(ev.passed ? "is-pass" : "is-fail", [
+      when(`${ev.label} — ${ev.attempts} attempt${ev.attempts > 1 ? "s" : ""}`),
+      el("h4", { textContent: ev.passed ? `${ev.label} passed` : `${ev.label} not passed` }),
+    ]);
+  }
+  if (ev.type === "error") {
+    return step("is-fail", [
+      when(ev.fatal ? "Run stopped" : "Warning"),
+      el("div", { className: "note warn", style: "margin-top:6px", textContent: ev.message }),
+    ]);
+  }
+  if (ev.type === "done") {
+    const box = el("div", { className: `sim-done ${ev.completed ? "ok" : "no"}` }, [
+      el("h4", { textContent: ev.completed ? "Every phase passed" : "Run stopped early" }),
+      el("div", { textContent: ev.message }),
+    ]);
+    const rows = el("div", { className: "sim-tally" });
+    for (const p of ev.phases) {
+      rows.append(el("span", { className: `sim-chip ${p.passed ? "met" : "block"}`,
+        textContent: `${p.label}: ${p.attempts} attempt${p.attempts > 1 ? "s" : ""}` }));
+    }
+    box.append(rows);
+    box.append(el("div", { className: "cost", textContent:
+      `${ev.usage.calls} model calls · ${ev.usage.input_tokens} in / ${ev.usage.output_tokens} out` }));
+    return step(ev.completed ? "is-pass" : "is-fail", box);
+  }
+  return null;
+}
+
+// ------------------------------------------------------------------- personas
+
+/* Read-only. Personas are authored in prompts/base/personas.yaml; this is where you
+ * read one, and — the part a template cannot show you — the exact prompt it would be
+ * sent, rendered by the server without spending a token.
+ */
+const HELP_SEEKING_NOTE = {
+  never: "Never asks for help.",
+  when_stuck: "Presses the help button after a failed attempt.",
+  eager: "Presses the help button before writing anything.",
+};
+
+function renderPersonas() {
+  const out = el("div");
+
+  if (S.personas === null) {
+    if (!S.personasLoading) {
+      S.personasLoading = true;
+      api("GET", "/api/personas")
+        .then((d) => {
+          S.personas = d.personas; S.simCap = d.max_attempts_cap;
+          S.personaDoc = { system_prompt: d.system_prompt, model: d.model, version: d.version };
+        })
+        .catch((e) => { S.personas = []; S.pv.error = e.message; })
+        .finally(() => { S.personasLoading = false; render(); });
+    }
+    out.append(el("div", { className: "card" },
+      el("p", { className: "empty", textContent: "Loading personas…" })));
+    return out;
+  }
+
+  const doc = S.personaDoc || {};
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: "Student personas" }),
+    el("p", { className: "sub", textContent:
+      `${S.personas.length} characters in prompts/base/personas.yaml (v${doc.version || 1}). `
+      + "Each is a student the Simulate tab can put through a whole session. Edit them in the "
+      + "file — this view is read-only, so a run and this page can never disagree." }),
+  ]));
+
+  if (S.pv.error) {
+    out.append(el("div", { className: "card" },
+      el("div", { className: "note warn", textContent: S.pv.error })));
+  }
+
+  for (const p of S.personas) out.append(personaCard(p));
+
+  // The system prompt is shared by every character, so it sits once at the bottom
+  // rather than being repeated in each card as if it varied.
+  if (doc.system_prompt) {
+    const box = el("div", { className: "card" }, [
+      el("h3", { textContent: "Shared system prompt" }),
+      el("p", { className: "sub", textContent:
+        "Every persona is sent this. The character itself arrives in the user turn — same shape "
+        + "as the judge, hint and nudge documents." }),
+      el("pre", { className: "preview", textContent: doc.system_prompt }),
+    ]);
+    out.append(box);
+  }
+  return out;
+}
+
+function personaCard(p) {
+  const open = S.pv.open === p.id;
+  const head = el("div", { className: "head" }, [
+    el("div", { className: "cid", textContent: p.id }),
+    el("span", { className: "gate", textContent: p.help_seeking.replace("_", " ") }),
+  ]);
+
+  const card = el("div", { className: "card" }, [
+    el("h3", { textContent: p.name }),
+    head,
+    el("p", { className: "sub", style: "margin-top:8px", textContent: p.blurb }),
+  ]);
+
+  const toggle = el("button", { className: "mini",
+    textContent: open ? "Hide the prompt" : "Show what this persona is sent" });
+  toggle.onclick = () => {
+    S.pv.open = open ? null : p.id;
+    S.pv.prompt = null;
+    if (!open) loadPersonaPreview(p.id);
+    render();
+  };
+  card.append(el("div", { className: "row", style: "margin-top:4px" }, [toggle]));
+
+  if (!open) return card;
+
+  card.append(el("h3", { textContent: "Character", style: "margin-top:14px; font-size:13px" }));
+  card.append(el("pre", { className: "preview", textContent: p.behaviour }));
+
+  const stages = el("div", { className: "row", style: "margin-top:12px; align-items:center" });
+  for (const [id, label] of [["first", "First attempt"], ["retry", "After a failed attempt"]]) {
+    const b = el("button", { className: `mini ${S.pv.stage === id ? "on" : ""}`, textContent: label });
+    b.onclick = () => { S.pv.stage = id; S.pv.prompt = null; loadPersonaPreview(p.id); render(); };
+    stages.append(b);
+  }
+  card.append(el("h3", { textContent: "The user turn", style: "margin-top:16px; font-size:13px" }));
+  card.append(el("p", { className: "sub", textContent:
+    `Rendered against ${S.phase.label} and ${S.problemSlug}, exactly as a run would send it. `
+    + "Switch phase or problem from the strip above to see another." }));
+  card.append(stages);
+
+  if (S.pv.loading) {
+    card.append(el("p", { className: "empty", textContent: "Rendering…" }));
+  } else if (S.pv.prompt) {
+    if (S.pv.prompt.sampled) {
+      card.append(el("div", { className: "note", style: "margin-top:10px", textContent:
+        "The bracketed lines stand in for a real verdict, nudge or hint — this page renders no "
+        + "model call, so there is nothing real to put there." }));
+    }
+    card.append(el("pre", { className: "preview", textContent: S.pv.prompt.user_prompt }));
+  }
+  return card;
+}
+
+async function loadPersonaPreview(personaId) {
+  S.pv.loading = true; S.pv.error = null;
+  try {
+    S.pv.prompt = await api("POST", "/api/persona-preview", {
+      persona: personaId, phase_id: S.phaseId, problem_id: S.problemSlug, stage: S.pv.stage,
+    });
+  } catch (e) {
+    S.pv.error = e.message; S.pv.prompt = null;
+  } finally {
+    S.pv.loading = false; render();
   }
 }
 
@@ -1574,6 +2119,7 @@ function render() {
   const views = {
     session: renderSession, rubric: renderRubric, criteria: renderCriteria,
     problem: renderProblem, prompt: renderPrompt, run: renderRun,
+    simulate: renderSimulate, personas: renderPersonas,
   };
   $("#main").replaceChildren(views[S.tab]());
   renderBar();

@@ -1,0 +1,31 @@
+id: problem.passing_rate
+title: Passing Rate
+difficulty: introductory
+topics:
+- arrays
+- loops
+- floating-point
+statement: |
+  A teacher wants to know what proportion of a class passed an exam.
+
+  Read an integer n, the number of students. Then read n scores, one per student, each a
+  whole number. A student passes if their score is 60 or above.
+
+  Print the percentage of students who passed, rounded to one decimal place. Print the
+  number only, with no percent sign.
+
+  You may assume there is at least one student, and that every score is between 0 and 100
+  inclusive.
+public_test_cases:
+- input: |-
+    3
+    90 45 60
+  output: '66.7'
+- input: |-
+    4
+    10 20 30 40
+  output: '0.0'
+- input: |-
+    2
+    60 59
+  output: '50.0'

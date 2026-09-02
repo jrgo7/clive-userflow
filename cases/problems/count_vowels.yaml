@@ -1,0 +1,23 @@
+id: problem.count_vowels
+title: Count Vowels
+difficulty: introductory
+topics:
+- strings
+- loops
+- characters
+statement: |
+  A text tool counts the vowels in a line of writing.
+
+  Read one line of text, which may contain spaces and may be up to 100 characters long.
+  Count the vowels in it and print that count as a whole number.
+
+  The vowels are a, e, i, o and u. Both capital and small letters count, so A and a are
+  both vowels. The letter y is never counted. Characters that are not letters are
+  ignored.
+public_test_cases:
+- input: Hello World
+  output: '3'
+- input: PROGRAMMING
+  output: '3'
+- input: rhythm
+  output: '0'

@@ -1,0 +1,22 @@
+id: problem.reverse_digits
+title: Reverse the Digits
+difficulty: introductory
+topics:
+- loops
+- integers
+- arithmetic
+statement: |
+  A puzzle program reverses the digits of a number.
+
+  Read a single positive integer and print the number formed by writing its digits in the
+  opposite order. Do not print leading zeros: reversing 120 gives 21, not 021.
+
+  The number you are given is between 1 and 1000000000 inclusive, and never starts with a
+  zero.
+public_test_cases:
+- input: '1234'
+  output: '4321'
+- input: '120'
+  output: '21'
+- input: '7'
+  output: '7'

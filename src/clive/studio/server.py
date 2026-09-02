@@ -12,13 +12,16 @@ import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from clive import hint as hinting
 from clive import judge as judging
+from clive import nudge as nudging
 from clive import prompts
+from clive import simulate as simulating
 from clive.config import EFFORT_CHOICES
 from clive.providers import get_provider
+from clive.studio import student as studenting
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -92,8 +95,45 @@ def route(method: str, path: str, body: dict) -> dict:
     if parts == ["api", "hint"] and method == "POST":
         return run_hint(body)
 
+    if parts == ["api", "nudge"] and method == "POST":
+        return run_nudge(body)
+
     if parts == ["api", "promote"] and method == "POST":
         return promote(body)
+
+    # The student API. Separate from the routes above rather than sharing them: those
+    # answer an author who may see everything, these answer a student who may not.
+    if parts == ["api", "student", "boot"] and method == "GET":
+        return studenting.boot()
+
+    if len(parts) == 4 and parts[:3] == ["api", "student", "problem"] and method == "GET":
+        return studenting.problem(parts[3])
+
+    if parts == ["api", "student", "submit"] and method == "POST":
+        return run_student_submit(body)
+
+    if parts == ["api", "student", "hint"] and method == "POST":
+        return run_student_hint(body)
+
+    if parts == ["api", "personas"] and method == "GET":
+        doc = prompts.load_personas()
+        return {
+            "personas": [
+                {
+                    "id": p["id"], "name": p["name"], "blurb": p.get("blurb", ""),
+                    "behaviour": p.get("behaviour", ""),
+                    "help_seeking": p.get("help_seeking", "never"),
+                }
+                for p in doc.get("personas") or []
+            ],
+            "system_prompt": doc.get("system_prompt", ""),
+            "model": doc.get("model", {}),
+            "version": doc.get("version", 1),
+            "max_attempts_cap": simulating.MAX_ATTEMPTS_CAP,
+        }
+
+    if parts == ["api", "persona-preview"] and method == "POST":
+        return persona_preview(body)
 
     raise ApiError(f"No route for {method} /{'/'.join(parts)}", 404)
 
@@ -205,6 +245,96 @@ def run_hint(body: dict) -> dict:
         raise ApiError(str(exc), 502) from None
 
 
+def run_nudge(body: dict) -> dict:
+    """One nudge for the judged submission in `body`, from the same resolved context the
+    judge used — so a Sandbox session nudges against its scratch criteria, not the saved
+    ones, and the gates named back to the student are the ones they were actually judged on.
+
+    Unlike a hint, this requires `verdicts`: the nudge speaks about failures, and without
+    a judge run there are none. The browser posts back the verdict list it just received
+    rather than the server re-judging, which would cost a second call and could disagree
+    with the result already on screen.
+    """
+    phase, problem, criteria = resolve_context(body)
+    try:
+        return nudging.nudge(
+            phase,
+            problem,
+            body.get("artifact") or {},
+            criteria,
+            body.get("verdicts") or [],
+            int(body.get("attempt", 1)),
+            body.get("prior_artifacts") or [],
+            body.get("history") or [],
+        )
+    except nudging.JudgeError as exc:
+        raise ApiError(str(exc), 502) from None
+
+
+def persona_preview(body: dict) -> dict:
+    """The exact prompt a persona would be sent, rendered without spending a token.
+
+    Same idea as the Prompt tab's preview: an author should be able to read what the
+    model will actually be told rather than infer it from the template. `stage` picks
+    which shape to show — the first attempt, or the retry where the feedback and help
+    blocks appear, which are the parts a template reader cannot easily picture.
+    """
+    doc = prompts.load_personas()
+    persona = prompts.find_persona(doc, body.get("persona") or "")
+    phase = prompts.load_phase(body["phase_id"])
+    problem = prompts.load_problem(body["problem_id"])
+    stage = body.get("stage") or "first"
+
+    feedback = help_text = None
+    attempt = 1
+    if stage == "retry":
+        attempt = 2
+        criteria = prompts.load_criteria(phase["phase"])["criteria"]
+        gating = [c for c in criteria if c.get("gate", prompts.DEFAULT_GATE) != "advisory"]
+        # A stand-in verdict so the block renders with real criterion text. Marked as a
+        # sample in the response so nobody reads it as a run that happened.
+        first = gating[0] if gating else {"text": "(a gating criterion)"}
+        feedback = {
+            "failed": [{"text": first.get("text", ""), "evidence": "(what the judge quoted)"}],
+            "nudge": {"summary": "(the summary naming every failing gate)",
+                      "nudge": "(the nudge for the one to fix first)"},
+            "previous": [{"label": f.get("label") or f["id"], "value": "(what they wrote last time)"}
+                         for f in phase.get("artifact_fields") or []],
+        }
+    if stage == "retry" or persona.get("help_seeking") == "eager":
+        help_text = {"diagnosis": "(one sentence on why they look stuck)",
+                     "hint": "(the nudge toward some optional depth)"}
+
+    return {
+        "system_prompt": doc.get("system_prompt", ""),
+        "user_prompt": prompts.render_persona_prompt(
+            doc, persona, phase, problem, attempt, None, feedback, help_text),
+        "stage": stage,
+        "sampled": stage == "retry" or help_text is not None,
+        "model": doc.get("model", {}),
+    }
+
+
+def run_student_submit(body: dict) -> dict:
+    """A student submission: judged, then nudged in the same call if a gate failed.
+
+    `student.submit` handles a failed nudge itself and still returns the verdicts, so
+    the only thing that reaches here is the judge call giving up entirely — which is
+    the one case where there is nothing to show.
+    """
+    try:
+        return studenting.submit(body)
+    except judging.JudgeError as exc:
+        raise ApiError(str(exc), 502) from None
+
+
+def run_student_hint(body: dict) -> dict:
+    try:
+        return studenting.hint(body)
+    except hinting.JudgeError as exc:
+        raise ApiError(str(exc), 502) from None
+
+
 def promote(body: dict) -> dict:
     """Write parts of a Sandbox scratch copy back to the real files.
 
@@ -246,11 +376,15 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "CLiveStudio"
 
     def do_GET(self):
-        path = urlparse(self.path).path
-        if path.startswith("/api/"):
-            self._handle("GET", path, {})
+        url = urlparse(self.path)
+        # Simulation is the one response that is not a single JSON body: it is a run that
+        # takes minutes, and the point of watching it is seeing each step as it lands.
+        if url.path == "/api/simulate":
+            self._stream_simulation(parse_qs(url.query))
+        elif url.path.startswith("/api/"):
+            self._handle("GET", url.path, {})
         else:
-            self._serve_static(path)
+            self._serve_static(url.path)
 
     def do_POST(self):
         self._handle("POST", urlparse(self.path).path)
@@ -289,8 +423,71 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # never let the browser hang on an unhandled error
             self._send_json(500, {"error": f"{type(exc).__name__}: {exc}"})
 
+    def _stream_simulation(self, qs: dict[str, list[str]]):
+        """Stream a persona's run as Server-Sent Events.
+
+        SSE rather than a websocket because this is one-way and the stdlib already does
+        it: a long-lived response, one `data:` line per event. `ThreadingHTTPServer` gives
+        each run its own thread, so a simulation does not block the Studio behind it.
+
+        Every event is flushed as it is produced. Buffering the run and sending it at the
+        end would answer the same JSON several minutes later, which is the thing this
+        endpoint exists not to do.
+        """
+        one = lambda k, d="": (qs.get(k) or [d])[0]
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        # Close, not keep-alive. There is no Content-Length and no chunked encoding on a
+        # stream of unknown length, so end-of-body *is* end-of-connection — announcing
+        # keep-alive leaves the client waiting after the last event for a body that is
+        # already complete.
+        self.send_header("Connection", "close")
+        self.close_connection = True
+        # Named proxies buffer event streams by default and would hold the whole run.
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+        def emit(event: dict) -> None:
+            payload = json.dumps(event, ensure_ascii=False, default=str)
+            self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
+            self.wfile.flush()
+
+        try:
+            events = simulating.run(
+                one("persona"),
+                one("problem"),
+                int(one("attempts", "3") or 3),
+                [p for p in (one("phases") or "").split(",") if p] or None,
+            )
+            for event in events:
+                emit(event)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # The browser navigated away or pressed Stop. Nothing was written that the
+            # user still wants; ending the generator is the whole of the cleanup.
+            return
+        except (ApiError, prompts.ContentError) as exc:
+            self._try_emit(emit, {"type": "error", "fatal": True, "message": str(exc)})
+        except Exception as exc:  # a stream cannot answer with a status code
+            self._try_emit(emit, {"type": "error", "fatal": True,
+                                  "message": f"{type(exc).__name__}: {exc}"})
+
+    @staticmethod
+    def _try_emit(emit, event: dict) -> None:
+        """Report a failure down a stream that may itself already be gone."""
+        try:
+            emit(event)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, ValueError):
+            pass
+
     def _serve_static(self, path: str):
-        name = "index.html" if path in ("/", "") else path.lstrip("/")
+        if path in ("/", ""):
+            name = "index.html"
+        elif path.rstrip("/") == "/student":
+            name = "student.html"
+        else:
+            name = path.lstrip("/")
         target = (STATIC_DIR / name).resolve()
         if not target.is_file() or STATIC_DIR.resolve() not in target.parents:
             self.send_error(404)
@@ -330,6 +527,7 @@ def serve(host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) 
 
     provider = get_provider()
     print(f"CLive Studio  {url}")
+    print(f"  student:  {url}student")
     print(f"  provider: {provider.name}")
     print(f"  phases:   {', '.join(p['label'] for p in prompts.list_phases())}")
     print(f"  problems: {len(prompts.list_problems())}")

@@ -1,0 +1,30 @@
+id: problem.temperature_range
+title: Temperature Range
+difficulty: introductory
+topics:
+- arrays
+- loops
+- conditionals
+statement: |
+  A weather station records the temperature once a day and wants to know the
+  warmest and coldest day of the period.
+
+  Read an integer n, the number of days recorded. Then read n temperatures, one per day,
+  each a whole number of degrees Celsius. Print the highest temperature and the lowest
+  temperature on one line, separated by a single space, with the highest first.
+
+  You may assume there is at least one day. A temperature may be negative, and is always
+  between -50 and 60 inclusive.
+public_test_cases:
+- input: |-
+    5
+    3 -2 7 0 -5
+  output: 7 -5
+- input: |-
+    1
+    -4
+  output: -4 -4
+- input: |-
+    4
+    -10 -3 -7 -1
+  output: -1 -10

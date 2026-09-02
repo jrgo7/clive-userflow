@@ -1,0 +1,39 @@
+id: problem.crowley_path
+title: Crowley's Path
+difficulty: introductory
+topics:
+- strings
+- loops
+- conditionals
+statement: |
+  Crowley is walking down a linear path. The path is given as a string of digits,
+  each one a feature of the path:
+
+    0 - Nothing
+    1 - Rope
+    2 - Key
+    3 - Cliff
+    4 - Door
+    9 - End of path (always the leftmost digit)
+
+  A path contains only these digits and is never more than nine digits long.
+
+  Crowley walks the path from right to left, visiting one feature at a time. For the path
+  90240 he visits 0, then 4, then 2, then 0, then 9.
+
+  Some features can stop him. A cliff stops Crowley's walk unless he picked up a rope before
+  reaching it -- he cannot fly, yet. A door stops him unless he picked up a key before
+  reaching it. Crowley picks up items as he passes them and can carry only one of each. An
+  item is used up the moment he uses it on its matching feature.
+
+  Write a function solvePath() that determines whether Crowley can traverse a given path to
+  its end. Return 1 if he can, and 0 otherwise.
+public_test_cases:
+- input: '94210'
+  output: '1'
+- input: '9301'
+  output: '1'
+- input: '90240'
+  output: '0'
+- input: '93301'
+  output: '0'

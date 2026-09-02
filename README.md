@@ -4,8 +4,9 @@ This repository outlines and demonstrates the various steps in CLive's user flow
 CLive aims to adopt the PCDIT framework for solving programming problems as an extension
 module for AnimoRank (an open-source programming practice platform).
 
-There are two ways in: a set of Jupyter notebooks that walk through the mechanics of a
-judging call, and **CLive Studio**, a local app for authoring the things those calls run on.
+There are three ways in: a set of Jupyter notebooks that walk through the mechanics of a
+judging call, **CLive Studio**, a local app for authoring the things those calls run on,
+and the **student view** at `/student`, which is the same engine seen from the other side.
 
 ## CLive Studio
 
@@ -16,7 +17,8 @@ uv run clive-studio       # opens http://127.0.0.1:8765
 ```
 
 `--port N` to move it, `--no-browser` to stop it opening a window. Editing works without
-an API key; only the Run tab needs one.
+an API key; only the Run tab needs one. The same server also serves the student view at
+`http://127.0.0.1:8765/student` — **Student view** in the header opens it.
 
 **Provider.** The judge call goes to Anthropic by default. Set `CLIVE_PROVIDER=deepseek`
 in `.env` (with `DEEPSEEK_API_KEY`) to send it to DeepSeek instead — the model dropdown and
@@ -35,6 +37,8 @@ else, so the notebooks, the Studio, and `git diff` never disagree.
 | **Problem** | Problem statements and their public test cases; create and delete problems | `cases/problems/<slug>.yaml` |
 | **Prompt** | The system prompt, the Jinja user template, the student-facing task description, the model/effort/token settings, and the artifact fields the student submits — with a render preview that costs nothing | `prompts/phases/<phase>.yaml` |
 | **Run** | A student artifact for the selected phase, judged against the saved criteria in one call | nothing |
+| **Simulate** | An LLM persona walks the whole session while you watch — see below | nothing |
+| **Personas** | Read-only: every persona, and the exact prompt it would be sent | nothing |
 
 The phase strip at the top switches between the three phases. Run reports each verdict with
 its evidence quote, and flags a quote that does not actually appear in the artifact — the
@@ -64,6 +68,82 @@ re-checking it when the view renders — **not** by `criteria_version`. The vers
 human maintains and can be bumped without a wording change or changed without a bump; the hash is
 a fact about what the judge was actually given. So bumping the version leaves verdicts valid, and
 editing a word of guidance invalidates them even if you forget to bump.
+
+## Simulating a student
+
+The **Simulate** tab runs an LLM through the whole session as a student, streaming each
+step as it happens. The judge, the nudge and the phase gating are the real ones running
+against the saved criteria — only the student is synthetic. It answers the questions about
+a rubric that are otherwise expensive to answer: does a thin answer get blocked for the
+reason you intended, does the nudge point somewhere that helps, does a competent answer
+actually get through, and does a phase take two attempts or six.
+
+Six characters live in `prompts/base/personas.yaml`, each built to trip something specific:
+
+| Persona | Built to stress |
+|---|---|
+| **The careful one** (`diligent`) | Nothing — it is the control. If it cannot pass, the rubric is too harsh and nothing the others tell you is worth reading yet |
+| **The one-liner** (`minimalist`) | Criteria that ask for substance rather than presence |
+| **The restater** (`copier`) | Criteria that ask for the student's own understanding |
+| **The one who wants to code** (`code_first`) | Criteria that keep a phase in plain language |
+| **The one who does not check** (`confident_wrong`) | Shown working, and expected outputs a judge has to compute to rule on |
+| **The one who does not read the note** (`feedback_deaf`) | Whether the nudge escalates, repeats itself, or eventually points somewhere new |
+| **The one who is completely lost** (`utter_beginner`) | Everything at once — thin, inconsistent work from someone who does not yet know what the phase is asking. The hardest case, and the most realistic |
+| **The one who nods along** (`nods_along`) | The same competence with the help button off, and inarticulate with it — so it separates "did not understand" from "could not say it". Pair it with `utter_beginner` to see what the hint is worth |
+
+**The persona never sees the criteria.** `render_persona_prompt` takes no rubric argument,
+so no caller can pass one — a simulated student handed the rubric writes to the rubric, and
+the run then measures the rubric against itself. It does see the verdicts and the nudge from
+its own previous attempt, because that is what a real student has on screen.
+
+**Reading a run.** The phase `task_description` spells out 11 of the 12 gating criteria
+as instructions, because that is what a student should be told. The side effect is that a
+model which simply follows those instructions passes the rubric whatever character it was
+handed — so if a persona sails through phases it was built to fail, suspect the persona
+layer losing to the instruction list before you suspect the rubric. `personas.yaml` v3
+addresses this directly in the system prompt; a weaker or lower-effort model also plays a
+weak student more convincingly than a strong one.
+
+**A persona can press the help button.** `help_seeking` on each one is `never`,
+`when_stuck` (after a failed attempt) or `eager` (before writing anything, which is the
+empty-form case the hint was built for). The loop calls the real `hint()`; only its prose
+reaches the character, never the criterion it points at — a persona that could read the
+rule would satisfy it, and the run would report the hint as more use than it is.
+
+A phase that is never passed stops the run, exactly as it would for a real student. Every
+attempt is up to three model calls (write, judge, nudge) plus one more if the persona asks
+for help, so the tab estimates the worst case before you start; `attempts` is capped at
+`simulate.MAX_ATTEMPTS_CAP`.
+
+The **Personas** tab is read-only and shows each character, its `help_seeking` mode, and —
+the part a template cannot show you — the exact prompt it would be sent, rendered against
+the selected phase and problem without spending a token. Toggle between the first attempt
+and the retry to see the feedback and help blocks.
+
+Add a persona by appending to `personas` in that file — `behaviour` is written as an
+instruction to an actor, and `blurb` should name what you expect it to trip.
+
+## The student view
+
+`/student` is what a student sees: the problem, one phase at a time, and the feedback. No
+rubric editor, no prompt preview, no model or token readouts. It is not the Sandbox — that is
+the author rehearsing a session against a scratch copy of the rubric. This judges the **saved**
+files, and its restrictions live in `src/clive/studio/student.py` rather than in the page:
+
+- **The rubric is not sent until it has been ruled on.** `/api/student/boot` returns phases
+  without their criteria; a criterion's text reaches the browser only attached to a verdict on
+  it. Shipping the rubric and hiding it in the page would leave the checklist one view-source
+  away from the student it is meant to make think. `tests/test_student.py` asserts this against
+  every criterion in the repo, the served HTML included — a criterion id in a *comment* fails it.
+- **Prompts, model ids and token counts are stripped.** They are the author's concern, and they
+  invite a student to argue with the judge rather than with the problem.
+- **The nudge is not a separate request.** `/api/student/submit` runs it in the same call
+  whenever a gate failed, so no page can render a failure without the guidance meant to come
+  with it. A nudge that fails comes back as `nudge_error` beside verdicts that still stand.
+
+Feedback reads in three colours, not two: **Met**, **Blocks** (a gating FAIL, which costs an
+attempt), and **Depth** (an advisory FAIL, which is reported and never blocks). The session
+lives in the browser's `localStorage`, keyed by problem — this system has no user model yet.
 
 ## Sandbox mode
 
@@ -109,11 +189,13 @@ the top of a Session — it is read by people, never sent to the model.
 ```
 criteria/<phase>.yaml         the rubric: one PASS/FAIL rule per criterion
 prompts/phases/<phase>.yaml   model settings, artifact fields, system prompt, user template
-prompts/base/                 the shared output schema the judge is constrained to
+prompts/base/                 the shared output schema, plus hint.yaml, nudge.yaml and personas.yaml
 cases/problems/<slug>.yaml    problem statements and public test cases
 cases/suites/<phase>.yaml     regression fixtures pinning expected verdicts
 notebooks/                    the walkthrough
-src/clive/                    prompts.py (load/render/save), judge.py (the call), studio/ (the app)
+src/clive/                    prompts.py (load/render/save), judge.py / hint.py / nudge.py (the calls)
+src/clive/persona.py          a simulated student writing one phase; simulate.py runs the session
+src/clive/studio/             server.py (routes + Studio), student.py (the student-facing API)
 src/clive/providers/          one file per model vendor; CLIVE_PROVIDER picks which the judge uses
 ```
 

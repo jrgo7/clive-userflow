@@ -285,6 +285,95 @@ def load_hint() -> dict:
     return data
 
 
+# ------------------------------------------------------------------------- nudge
+
+
+def nudge_path() -> Path:
+    return BASE_PROMPTS_DIR / "nudge.yaml"
+
+
+def load_nudge() -> dict:
+    """The shared nudge prompt. One document for every phase, for the same reason
+    `load_hint` gives — the nudge reads whichever phase's failing gates it is handed,
+    so there is nothing per-phase about it to author."""
+    path = nudge_path()
+    if not path.exists():
+        raise ContentError(
+            "The nudge prompt is missing. Expected prompts/base/nudge.yaml."
+        )
+    data = read_yaml(path)
+    for key in ("system_prompt", "user_template"):
+        if not str(data.get(key, "")).strip():
+            raise ContentError(f"prompts/base/nudge.yaml has no {key}.")
+    model = data.setdefault("model", {})
+    model.setdefault("id", get_provider().default_model)
+    model.setdefault("effort", "medium")
+    model.setdefault("max_output_tokens", 2000)
+    return data
+
+
+# ---------------------------------------------------------------------- personas
+
+
+#: When a persona presses the help button. `never` spends no extra call; `when_stuck`
+#: asks before a retry; `eager` asks before writing anything, which is the empty-form
+#: case the hint was built for.
+HELP_SEEKING = ("never", "when_stuck", "eager")
+
+
+def personas_path() -> Path:
+    return BASE_PROMPTS_DIR / "personas.yaml"
+
+
+def load_personas() -> dict:
+    """The simulated-student prompt and the characters it can play.
+
+    One document, like the hint and nudge prompts: the frame and the output contract are
+    shared, and only `behaviour` differs per character — so the personas live beside the
+    prompt that renders them rather than in a file each.
+    """
+    path = personas_path()
+    if not path.exists():
+        raise ContentError("The persona prompt is missing. Expected prompts/base/personas.yaml.")
+    data = read_yaml(path)
+    for key in ("system_prompt", "user_template"):
+        if not str(data.get(key, "")).strip():
+            raise ContentError(f"prompts/base/personas.yaml has no {key}.")
+    data.setdefault("personas", [])
+    seen: set[str] = set()
+    for p in data["personas"]:
+        pid = check_slug(p.get("id", ""), "persona id")
+        if pid in seen:
+            raise ContentError(f"Duplicate persona id {pid!r}.")
+        seen.add(pid)
+        if not str(p.get("behaviour", "")).strip():
+            raise ContentError(f"Persona {pid!r} has no behaviour.")
+        p.setdefault("name", pid)
+        p.setdefault("blurb", "")
+        # Unmarked means never. That was every persona's behaviour before the field
+        # existed, and it is the option that spends no extra call.
+        help_seeking = str(p.get("help_seeking") or "never").strip()
+        if help_seeking not in HELP_SEEKING:
+            raise ContentError(
+                f"Persona {pid!r} has help_seeking {help_seeking!r}; "
+                f"expected one of {', '.join(HELP_SEEKING)}."
+            )
+        p["help_seeking"] = help_seeking
+    model = data.setdefault("model", {})
+    model.setdefault("id", get_provider().default_model)
+    model.setdefault("effort", "medium")
+    model.setdefault("max_output_tokens", 3000)
+    return data
+
+
+def find_persona(doc: dict, persona_id: str) -> dict:
+    for p in doc.get("personas") or []:
+        if p["id"] == persona_id:
+            return p
+    known = ", ".join(p["id"] for p in doc.get("personas") or []) or "none"
+    raise ContentError(f"No persona {persona_id!r}. Known personas: {known}.")
+
+
 # ---------------------------------------------------------------------- criteria
 
 
@@ -349,6 +438,41 @@ def advisory_criteria(criteria: list[dict]) -> list[dict]:
     are never shown to the model at all.
     """
     return [c for c in criteria if c.get("gate", DEFAULT_GATE) == "advisory"]
+
+
+def failing_gates(criteria: list[dict], verdicts: list[dict]) -> list[dict]:
+    """The gating criteria this submission actually failed, in rubric order.
+
+    The nudge's counterpart to `advisory_criteria`, and its exact complement: that one
+    takes `== "advisory"`, this one takes everything else, so no criterion falls through
+    both and an unmarked one lands here — which is what `DEFAULT_GATE` intends.
+
+    Only these may be nudged at. An advisory FAIL never held the student anywhere, so
+    telling them to go fix it would misreport what the phase asked of them; it is already
+    reported beside the verdicts as the optional depth it is.
+
+    A criterion the judge returned no verdict for is left out. The Studio treats a missing
+    verdict as blocking, and rightly — it is not a pass — but it is a broken judge contract
+    rather than something the student wrote wrong, and there is no failure to describe to
+    them. It surfaces as `missing_ids` on the judge result instead.
+
+    Each entry carries the judge's own `evidence` and `confidence` for that failure, so
+    the prompt can show why the verdict went the way it did without the caller joining
+    two lists itself. Rubric order is authoring order — the order the phase's criteria
+    were written to be read in — and the model is asked to choose within it, not re-sort it.
+    """
+    failed = {
+        v.get("criterion_id"): v for v in verdicts or [] if v.get("verdict") == "FAIL"
+    }
+    return [
+        {
+            **c,
+            "evidence": failed[c["id"]].get("evidence", ""),
+            "confidence": failed[c["id"]].get("confidence", ""),
+        }
+        for c in criteria
+        if c.get("gate", DEFAULT_GATE) != "advisory" and c.get("id") in failed
+    ]
 
 
 def _as_block(text: str) -> str:
@@ -498,6 +622,73 @@ def render_hint_prompt(
         artifact=artifact or {},
         artifact_fields=phase.get("artifact_fields") or [],
         criteria=criteria,
+        attempt=attempt,
+        prior_artifacts=prior_artifacts or [],
+        history=history or [],
+    )
+
+
+def render_persona_prompt(
+    persona_doc: dict,
+    persona: dict,
+    phase: dict,
+    problem: dict,
+    attempt: int = 1,
+    prior_artifacts: list[dict] | None = None,
+    feedback: dict | None = None,
+    help: dict | None = None,
+) -> str:
+    """Render the simulated-student template.
+
+    There is no `criteria` argument and there must never be one. A persona is handed what
+    a student has — the problem, the phase instructions, its own earlier work, and the
+    feedback on its last attempt. Show it the rubric and it writes to the rubric, which
+    measures the rubric against itself.
+
+    `feedback` is `{"failed": [{"text", "evidence"}], "nudge": {...}, "previous": [{"label",
+    "value"}]}` — the verdicts and nudge a real student would have been looking at, plus
+    what they wrote last time. Absent on the first attempt, and guarded in the template.
+    """
+    template = jinja_env().from_string(persona_doc["user_template"])
+    return template.render(
+        persona=persona,
+        phase=phase,
+        problem=problem,
+        artifact_fields=phase.get("artifact_fields") or [],
+        attempt=attempt,
+        prior_artifacts=prior_artifacts or [],
+        feedback=feedback,
+        help=help,
+    )
+
+
+def render_nudge_prompt(
+    nudge_doc: dict,
+    phase: dict,
+    problem: dict,
+    artifact: dict,
+    failures: list[dict],
+    attempt: int = 1,
+    prior_artifacts: list[dict] | None = None,
+    history: list[dict] | None = None,
+) -> str:
+    """Render the shared nudge template.
+
+    `failures` is the failing gating subset — see `failing_gates`, which also attaches
+    each one's judge evidence. It is named `failures` rather than `criteria` because the
+    template says "what did not pass", not "what you are being judged on": these are the
+    only criteria the model sees, and it must not read them as the whole rubric.
+
+    `history` is the same conversation seam `render_hint_prompt` carries, guarded in the
+    template by `{% if history %}` so omitting it renders the single-shot prompt unchanged.
+    """
+    template = jinja_env().from_string(nudge_doc["user_template"])
+    return template.render(
+        phase=phase,
+        problem=problem,
+        artifact=artifact or {},
+        artifact_fields=phase.get("artifact_fields") or [],
+        failures=failures,
         attempt=attempt,
         prior_artifacts=prior_artifacts or [],
         history=history or [],

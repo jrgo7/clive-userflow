@@ -8,11 +8,18 @@
 # from CLive Studio (`read_header` in prompts.py).
 #
 #   Why advisory only
-#              The model never sees the gating criteria. A hint that names the
-#              requirement a student is failing hands them the answer, which is the
-#              one thing this system exists not to do. Pointing at optional depth
-#              instead gives them somewhere to think from, and the work of getting
-#              there is usually what surfaces the blocking gap themselves.
+#              The model never sees the gating criteria. A hint is asked for before
+#              any submission has been judged, so naming the requirement a student is
+#              failing would tell them what they are failing before anything ruled on
+#              it -- and there is no verdict on screen for it to be an explanation of.
+#              Pointing at optional depth instead gives them somewhere to think from,
+#              and the work of getting there is usually what surfaces the blocking gap
+#              themselves.
+#
+#              Once a submission HAS been judged this reverses, and that is
+#              `base/nudge.yaml`: it may only name gating criteria the student failed,
+#              because those verdicts are already in front of them. The rule both files
+#              actually share is the "name what is missing, never supply it" section.
 #
 #   system_prompt
 #              Self-contained, like the phase prompts -- it does not compose

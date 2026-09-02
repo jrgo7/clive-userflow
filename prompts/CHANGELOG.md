@@ -2,6 +2,149 @@
 
 > Please update this file whenever prompts are changed by documenting why each version changed.
 
+## base/personas.yaml v5 - nods_along cannot write either - 2026-09-02
+
+**`nods_along` is now inarticulate as well as lost.** Getting a thought into words is hard
+for it on its own, separately from having the thought: answers come out as fragments, a
+phrase with the important half missing, or the same small idea said twice. It never
+elaborates, never reaches for an example, and where a box asks it to explain its reasoning
+it restates what it did instead.
+
+**This is not a length knob.** `minimalist` already writes little, on purpose, to be done.
+This one writes little because it has run out of words and would write more if it could,
+and the behaviour says so explicitly so the two do not collapse into each other.
+
+**What it buys the rubric.** A criterion this persona fails may be catching a student who
+did not understand, or one who understood and could not say it -- two failures the rubric
+currently scores identically. `novel_wording`, `work_is_shown`, `case_purpose_stated` and
+`state_is_named` all ask the student to *articulate* something, and this is the only
+character that isolates that. A failure there is worth reading before it is trusted.
+
+## base/personas.yaml v4 - the one who nods along - 2026-09-02
+
+**A first-timer who never asks.** `nods_along`: the only prior experience is copying HTML
+tags that worked when typed correctly, so programming reads as shapes to reproduce
+accurately. The lecture moves too fast and demonstrates code without explaining why it
+works, so there is a store of syntax and no sense of what it is for. Anything arithmetic
+closes them down -- a division, a percentage, "two decimal places" -- and they go vague
+on it or write more about a safer part of the box. Instructions are read absolutely
+literally, and anything implied rather than stated is missed entirely.
+
+**`help_seeking: never` is the character, not a default.** Being embarrassed to ask an
+obvious question is the defining trait, so the confusion compounds instead of being
+cleared: gaps are covered with a confident-sounding sentence that says nothing, never with
+"not sure", and later phases rest on earlier answers that were never understood.
+
+**That makes it the controlled counterpart to `utter_beginner`** -- comparable competence,
+opposite help behaviour, nothing else different. Run both on one problem and the gap
+between them is what the hint is actually worth, which no single persona can tell you.
+
+**It is also the sharpest test of the v3 finding.** A character that follows the letter of
+every instruction and almost none of its intent should pass exactly those criteria that
+were only ever checking wording. Whatever it passes is worth re-reading.
+
+## base/personas.yaml v3 - instructions are not a checklist - 2026-09-02
+
+See the v3 entry inside `prompts/base/personas.yaml`: the phase `task_description` spells
+out 11 of the 12 gating criteria as instructions, so a model that simply follows it
+satisfies the rubric whatever character it was told to play. The system prompt now says so.
+
+## base/personas.yaml v2 - the beginner, and the help button - 2026-09-02
+
+**A persona can now press the help button.** New per-persona field `help_seeking`:
+`never` (the default, and every persona's behaviour before this existed), `when_stuck`
+(asks after a failed attempt) or `eager` (asks before writing anything). The loop calls
+the real `hint()` and renders what comes back into a HELP block. Until now the hint was
+the one call a simulation never exercised.
+
+**Only the hint's prose is handed to the character; the criterion it points at is not.**
+A student sees that label on screen, but a persona that could read the rule would satisfy
+it, and the run would then report the hint as more use than it actually is.
+
+**New persona `utter_beginner`.** A student who has not yet learned how to do any of this:
+drifts between describing, testing and planning because the difference is not yet clear;
+writes unevenly, some boxes with real effort about the wrong thing and others with a
+fragment or "not sure"; contradicts itself between boxes; misreads one clause of an
+instruction and misses the rest; takes help very literally and applies it to the wrong
+box. It asks for help before writing a word, which is the empty-form case the hint was
+built for.
+
+This is the hardest case for the whole system and the most realistic failure in an
+introductory course. The criteria have to fail work that is thin and inconsistent without
+any single one of them being the thing that explains why, and the nudge has to give
+somewhere to start to someone who does not yet know what the phase is asking for. The
+question a run answers is whether it converges at all or just repeats itself.
+
+## base/personas.yaml v1 - simulated students - 2026-09-02
+
+**A rubric can now be walked end to end without waiting for a class.** New file
+`prompts/base/personas.yaml` holds the frame, the output contract and six characters;
+`src/clive/persona.py` makes the call and `src/clive/simulate.py` runs the loop -- write,
+judge, nudge, revise, advance. The judge, the nudge and the gating are the real ones
+against the saved criteria. Only the student is synthetic.
+
+**The persona is never shown the criteria,** and `render_persona_prompt` takes no rubric
+argument, so no caller can pass one. A simulated student handed the rubric writes to the
+rubric, and the run then measures the rubric against itself. It *is* shown the verdicts and
+the nudge from its previous attempt, because that is what a real student has on screen --
+which is what makes a run a test of whether the nudge actually helps. `tests/test_simulate.py`
+asserts both halves against every criterion in the repo.
+
+**Six characters, each built to trip something specific.** `minimalist` (substance rather
+than presence), `copier` (own words), `code_first` (plain language, and not solving during
+Problem), `confident_wrong` (shown working, correct expected outputs), `feedback_deaf`
+(whether the nudge escalates or repeats), and `diligent` as the control -- if that one
+cannot pass, the rubric is too harsh and nothing the others tell you is worth reading yet.
+`blurb` records what each is for, because a persona whose purpose is not written down
+becomes a persona nobody trusts the result of.
+
+**Character sits in the user turn, not the system prompt,** matching the judge, hint and
+nudge documents: static system, templated user. The output schema is built per phase from
+`artifact_fields`, so a phase that gains a box in the Studio gains a key here with no code
+change.
+
+**A phase that is never passed stops the run.** That is the gating rule rather than a
+shortcut -- a student who cannot get through Problem never sees Cases, and a simulation
+that marched on regardless would be reporting on a system nobody uses.
+
+## base/nudge.yaml v1 - the nudge call - 2026-09-02
+
+**A student who fails a phase is told what is holding them, and given one thing to fix.**
+New file `prompts/base/nudge.yaml` holds the system prompt and template;
+`src/clive/nudge.py` makes the call, mirroring `hint.py` and `judge.py`. It is pushed
+after a failing submit rather than asked for -- a student who has just been told they did
+not pass should not have to go looking for where to start.
+
+**The nudge may only ever name a gating criterion the student actually failed,** which is
+the mirror of the hint's rule and not a reversal of it. The two calls fire at different
+moments. A hint runs with no verdicts in hand, so naming a gate there would tell a student
+what they are failing before anything judged them; a nudge runs on verdicts already on
+screen, where naming one back reveals nothing they were not just shown, and refusing to
+would leave them guessing. Enforced in code the same way: `failing_gates` selects the set
+inside `nudge()` so no caller can widen it, and a reply naming anything outside it -- an
+advisory criterion, a criterion that passed, an invented id -- is refused rather than shown.
+`failing_gates` is the exact complement of `advisory_criteria`, so no criterion falls
+through both and an unmarked one is treated as gating.
+
+**Acknowledge all, nudge one.** The summary must account for every failing gate: a student
+who fixes one thing, resubmits, and finds three more waiting learns the system was holding
+something back. But `reason` and `nudge` concern one criterion only, because four
+corrections at once produce four shallow edits. The set is computed in code and returned as
+`failing` for the caller to render, so acknowledgement is structural -- a summary that
+forgets a criterion cannot hide it. The model is asked to pick the most upstream failure,
+falling back to rubric order, which is the order the phase's criteria were written to be
+read in.
+
+**A criterion the judge returned no verdict for is not nudged at.** The Studio treats a
+missing verdict as blocking, and rightly -- it is not a pass -- but it is a broken judge
+contract rather than something the student wrote wrong, so there is no failure to describe.
+It stays reported as `missing_ids`.
+
+**It pins no `model.id`,** for the reason `base/hint.yaml` gives, and carries the same
+`history` seam guarded by `{% if history %}`. The evidence line uses one expression rather
+than an `{% if %}` block because the environment sets `trim_blocks`, which would eat the
+newline after `{% endif %}` and run each criterion into the next.
+
 ## base/hint.yaml v1 - the hint call - 2026-09-01
 
 **A stuck student can ask for one hint.** It names a single criterion to improve, and

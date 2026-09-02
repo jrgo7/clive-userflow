@@ -1,0 +1,22 @@
+id: problem.leap_year
+title: Leap Year
+difficulty: introductory
+topics:
+- conditionals
+- integers
+statement: |
+  A calendar program needs to know whether a given year is a leap year.
+
+  Read a single integer, the year. Print exactly Leap if it is a leap year and exactly
+  Not leap if it is not. Print nothing else.
+
+  A year is a leap year if it is divisible by 4, except that a year divisible by 100 is
+  not a leap year unless it is also divisible by 400. The year is between 1 and 9999
+  inclusive.
+public_test_cases:
+- input: '2024'
+  output: Leap
+- input: '1900'
+  output: Not leap
+- input: '2000'
+  output: Leap

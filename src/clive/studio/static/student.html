@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap">
+<style>
+  /* The student view. Same engine as the Studio, different job: this page is read by
+     someone being taught, so it shows the work and hides the machinery. Nothing here
+     renders a prompt, a model id, or a token count, and the rubric only ever arrives
+     attached to a verdict on it. See studio/student.py for the server half. */
+
+  :root {
+    --paper:#f4f6f5; --surface:#fff; --surface-2:#eef2f0;
+    --ink:#14201f; --ink-2:#5c6b69; --ink-3:#8b9997;
+    --line:#dbe3e0; --line-2:#c3cfcb;
+    --accent:#0f5257; --accent-2:#0b3d41; --accent-wash:#e2eeec; --on-accent:#fff;
+    /* Three semantic colours, not two: a blocking failure and an advisory one are
+       different facts, and painting both red would tell the student a lie. */
+    --met:#1f7a4d; --met-wash:#e3f1e8;
+    --block:#a8342a; --block-wash:#f8e6e3;
+    --advise:#8a6d1f; --advise-wash:#f6eeda;
+    --lock:#97a5a2;
+    --bar-bg:#10201f; --bar-ink:#cfe0dc; --bar-ink-2:#7d938f; --bar-line:#243936;
+    --shadow:0 1px 2px rgba(20,32,31,.05), 0 8px 24px -16px rgba(20,32,31,.22);
+    --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;
+    --serif:"Newsreader",ui-serif,Georgia,"Times New Roman",serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0f1413; --surface:#161d1c; --surface-2:#1c2523;
+      --ink:#e6ece9; --ink-2:#97a6a2; --ink-3:#6f807c;
+      --line:#29352f; --line-2:#3a4a45;
+      --accent:#5fbfa8; --accent-2:#8ad6c3; --accent-wash:#17302c; --on-accent:#08201d;
+      --met:#5fd39b; --met-wash:#13291f;
+      --block:#ff9184; --block-wash:#301a18;
+      --advise:#dbb463; --advise-wash:#2c2515;
+      --lock:#5c6a67;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0f1413; --surface:#161d1c; --surface-2:#1c2523;
+    --ink:#e6ece9; --ink-2:#97a6a2; --ink-3:#6f807c;
+    --line:#29352f; --line-2:#3a4a45;
+    --accent:#5fbfa8; --accent-2:#8ad6c3; --accent-wash:#17302c; --on-accent:#08201d;
+    --met:#5fd39b; --met-wash:#13291f;
+    --block:#ff9184; --block-wash:#301a18;
+    --advise:#dbb463; --advise-wash:#2c2515;
+    --lock:#5c6a67;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing:border-box; }
+  html { color-scheme: light dark; }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans);
+         font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased; }
+  h1,h2,h3 { text-wrap:balance; margin:0; }
+  p { margin:0; }
+  button, select { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:3px; }
+  @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.01ms!important; transition-duration:.01ms!important; } }
+
+  .bar { background:var(--bar-bg); color:var(--bar-ink); border-bottom:1px solid var(--bar-line);
+         padding:9px 20px; display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px;
+         font-family:var(--mono); font-size:11.5px; position:sticky; top:0; z-index:20; }
+  .bar .brand { font-weight:600; letter-spacing:.14em; text-transform:uppercase; }
+  .bar .note { color:var(--bar-ink-2); }
+  .bar .spacer { flex:1 1 auto; }
+  .bar select, .bar button, .bar a {
+    background:transparent; color:var(--bar-ink); border:1px solid var(--bar-line);
+    border-radius:5px; padding:4px 10px; font-family:var(--mono); font-size:11.5px;
+    text-decoration:none; transition:background .12s,border-color .12s; }
+  .bar select:hover, .bar button:hover, .bar a:hover { background:#1b2f2c; border-color:#3a5450; }
+  .bar select { padding:3px 6px; }
+  .bar select option { background:var(--bar-bg); color:var(--bar-ink); }
+  .bar :focus-visible { outline-color:var(--bar-ink); }
+
+  .wrap { max-width:840px; margin:0 auto; padding:28px 20px 80px; }
+  .masthead { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:22px; }
+  .masthead .eyebrow { font-family:var(--mono); font-size:11px; letter-spacing:.1em;
+                       text-transform:uppercase; color:var(--ink-3); }
+  .masthead h1 { font-family:var(--serif); font-size:27px; font-weight:500; letter-spacing:-.01em; }
+
+  .track { display:flex; gap:6px; margin-bottom:24px; }
+  .track .step { flex:1; text-align:left; background:var(--surface); border:1px solid var(--line);
+                 border-radius:9px; padding:10px 13px 11px; display:flex; flex-direction:column; gap:2px;
+                 transition:border-color .15s,background .15s; }
+  .track .step .n { font-family:var(--mono); font-size:10.5px; letter-spacing:.1em;
+                    text-transform:uppercase; color:var(--ink-3); }
+  .track .step .nm { font-weight:600; font-size:15px; }
+  .track .step .st { font-size:12px; color:var(--ink-2); }
+  .track .step.current { border-color:var(--accent); background:var(--accent-wash); }
+  .track .step.current .nm, .track .step.current .n { color:var(--accent-2); }
+  .track .step.passed { border-color:var(--line-2); }
+  .track .step.passed .st { color:var(--met); font-weight:500; }
+  .track .step.locked { background:transparent; border-style:dashed; }
+  .track .step.locked .nm, .track .step.locked .st, .track .step.locked .n { color:var(--lock); }
+  .track button.step { cursor:pointer; }
+  .track button.step:hover { border-color:var(--line-2); }
+
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:12px;
+          padding:20px 22px; margin-bottom:16px; box-shadow:var(--shadow); }
+  .card > h2 { font-family:var(--serif); font-size:20px; font-weight:600;
+               display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .card .attempt { font-family:var(--mono); font-size:11px; letter-spacing:.07em;
+                   text-transform:uppercase; color:var(--ink-3); font-weight:500; }
+
+  .brief summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:9px;
+                   font-family:var(--mono); font-size:11px; letter-spacing:.1em;
+                   text-transform:uppercase; color:var(--ink-2); font-weight:500; }
+  .brief summary::-webkit-details-marker { display:none; }
+  .brief summary::before { content:"\25B8"; color:var(--accent); font-size:13px; transition:transform .15s; }
+  .brief[open] summary::before { transform:rotate(90deg); }
+  .brief .statement { font-family:var(--serif); font-size:17px; line-height:1.6;
+                      margin-top:14px; white-space:pre-wrap; max-width:62ch; }
+  .brief .cases { margin-top:16px; border-top:1px solid var(--line); padding-top:14px; }
+  .brief .cases .lbl { font-family:var(--mono); font-size:10.5px; letter-spacing:.1em;
+                       text-transform:uppercase; color:var(--ink-3); margin-bottom:8px; }
+  .scroll { overflow-x:auto; }
+  .iotable { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px; }
+  .iotable th { text-align:left; font-weight:500; color:var(--ink-3); font-size:10.5px;
+                letter-spacing:.08em; text-transform:uppercase; padding:0 12px 6px 0; }
+  .iotable td { padding:5px 12px 5px 0; border-top:1px solid var(--line);
+                white-space:pre-wrap; vertical-align:top; font-variant-numeric:tabular-nums; }
+
+  .task { border-left:2px solid var(--accent); padding:2px 0 2px 15px; margin:14px 0 22px;
+          color:var(--ink-2); font-size:14.5px; max-width:64ch; white-space:pre-wrap; }
+  .fields { display:flex; flex-direction:column; gap:18px; }
+  .fld label { display:block; font-weight:600; font-size:14px; margin-bottom:3px; }
+  .fld .help { font-size:12.5px; color:var(--ink-2); margin-bottom:7px; }
+  .fld textarea { width:100%; background:var(--paper); color:var(--ink); border:1px solid var(--line-2);
+                  border-radius:8px; padding:10px 12px; font-family:var(--sans); font-size:14.5px;
+                  line-height:1.5; resize:vertical; transition:border-color .12s,background .12s; }
+  .fld textarea:focus { border-color:var(--accent); background:var(--surface); outline:none; }
+
+  .actions { display:flex; gap:10px; margin-top:22px; flex-wrap:wrap; align-items:center; }
+  .btn { border-radius:8px; padding:9px 17px; font-weight:500; font-size:14.5px;
+         border:1px solid var(--accent); background:var(--accent); color:var(--on-accent);
+         transition:background .12s,opacity .12s; }
+  .btn:hover:not([disabled]) { background:var(--accent-2); border-color:var(--accent-2); }
+  .btn.ghost { background:transparent; border-color:var(--line-2); color:var(--ink); }
+  .btn.ghost:hover:not([disabled]) { background:var(--surface-2); border-color:var(--ink-3); }
+  .btn[disabled] { opacity:.45; cursor:not-allowed; }
+  .actions .stat { font-size:12.5px; color:var(--ink-2); margin-left:auto; font-family:var(--mono); }
+
+  .fb { border-radius:12px; padding:18px 20px; margin-bottom:16px;
+        border:1px solid var(--line); background:var(--surface); box-shadow:var(--shadow); }
+  .fb h3 { font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+           font-weight:600; margin-bottom:11px; }
+  .fb .lead { font-size:15.5px; line-height:1.5; margin-bottom:11px; }
+  .fb .prose { font-size:14.5px; line-height:1.55; max-width:62ch; white-space:pre-wrap; }
+  .fb .foot { font-size:12.5px; color:var(--ink-2); margin-top:11px; padding-top:10px;
+              border-top:1px solid var(--line); }
+  .fb .dismiss { background:transparent; border:1px solid var(--line-2); border-radius:6px;
+                 padding:4px 11px; font-size:12.5px; color:var(--ink-2); margin-top:13px; }
+  .fb .dismiss:hover { border-color:var(--ink-3); color:var(--ink); }
+  .fb.hint { border-left:3px solid var(--advise); }
+  .fb.hint h3 { color:var(--advise); }
+  .fb.nudge { border-left:3px solid var(--block); }
+  .fb.nudge h3 { color:var(--block); }
+
+  .outstanding { list-style:none; padding:0; margin:0 0 15px; border-top:1px solid var(--line); }
+  .outstanding li { padding:9px 0; border-bottom:1px solid var(--line);
+                    display:flex; gap:11px; align-items:baseline; }
+  .outstanding .dot { flex:0 0 auto; width:6px; height:6px; border-radius:50%;
+                      background:var(--line-2); transform:translateY(-1px); }
+  .outstanding li.focus .dot { background:var(--block); }
+  .outstanding .txt { flex:1; font-size:14px; color:var(--ink-2); }
+  .outstanding li.focus .txt { color:var(--ink); font-weight:500; }
+  .outstanding .here { font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+                       text-transform:uppercase; color:var(--block); background:var(--block-wash);
+                       padding:2px 7px; border-radius:3px; white-space:nowrap; }
+
+  .ledger .row { display:flex; gap:13px; padding:13px 0; border-top:1px solid var(--line); align-items:flex-start; }
+  .ledger .row:first-of-type { border-top:none; }
+  .badge { flex:0 0 auto; font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.09em;
+           padding:3px 8px; border-radius:4px; margin-top:2px; min-width:52px; text-align:center; }
+  .badge.met { background:var(--met-wash); color:var(--met); }
+  .badge.block { background:var(--block-wash); color:var(--block); }
+  .badge.adv { background:var(--advise-wash); color:var(--advise); }
+  .ledger .what { flex:1; min-width:0; }
+  .ledger .what .t { font-size:14.5px; }
+  .ledger .what .cid { font-family:var(--mono); font-size:11.5px; color:var(--ink-3); margin-top:2px;
+                       display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
+  .ledger .what .gate { letter-spacing:.09em; text-transform:uppercase; font-size:9.5px; font-weight:600;
+                        border:1px solid var(--line-2); border-radius:3px; padding:1px 5px; }
+  .ledger .what .gate.advisory { color:var(--advise); border-color:var(--advise); }
+  .ledger blockquote { margin:8px 0 0; padding:7px 11px; background:var(--surface-2); border-radius:6px;
+                       font-family:var(--mono); font-size:12px; color:var(--ink-2); white-space:pre-wrap;
+                       overflow-x:auto; }
+  .ledger .norule { font-size:12.5px; color:var(--ink-2); margin-top:6px; font-style:italic; }
+
+  .banner { border-radius:10px; padding:13px 16px; font-size:14.5px; margin-bottom:16px; border:1px solid; }
+  .banner.pass { background:var(--met-wash); border-color:var(--met); color:var(--met); }
+  .banner.warn { background:var(--advise-wash); border-color:var(--advise); color:var(--advise); }
+  .banner.err { background:var(--block-wash); border-color:var(--block); color:var(--block); }
+  .banner.muted { background:var(--surface-2); border-color:var(--line-2); color:var(--ink-2); }
+
+  .thinking { display:flex; align-items:center; gap:10px; color:var(--ink-2); font-size:14px; }
+  .pulse { width:7px; height:7px; border-radius:50%; background:var(--accent);
+           animation:pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:.25;transform:scale(.8);} 50%{opacity:1;transform:scale(1.15);} }
+
+  .done { text-align:center; padding:34px 20px; }
+  .done h2 { font-family:var(--serif); font-size:25px; font-weight:500; margin-bottom:8px; }
+  .done p { color:var(--ink-2); max-width:46ch; margin:0 auto; }
+
+  @media (max-width:620px) {
+    .track { flex-direction:column; }
+    .wrap { padding:20px 14px 60px; }
+    .card { padding:17px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <span class="brand">CLive</span>
+  <span class="note" id="bar-note">loading…</span>
+  <span class="spacer"></span>
+  <select id="problem-pick" aria-label="Problem"></select>
+  <button type="button" id="restart">Start over</button>
+  <a href="/" title="The authoring tool">Studio</a>
+</div>
+
+<div class="wrap">
+  <div class="masthead">
+    <span class="eyebrow" id="eyebrow">Problem solving</span>
+    <h1 id="title">…</h1>
+  </div>
+  <div class="track" id="track"></div>
+  <details class="card brief" id="brief" open>
+    <summary>The problem</summary>
+    <div id="brief-body"></div>
+  </details>
+  <div id="stage"></div>
+</div>
+
+<script>
+/* ---------------------------------------------------------------- helpers -- */
+const h = (tag, attrs = {}, kids = []) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k.startsWith("on")) { if (v) e.addEventListener(k.slice(2), v); }
+    else if (v === true) e.setAttribute(k, "");
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const kid of [].concat(kids)) if (kid) e.append(kid);
+  return e;
+};
+
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({ error: `${res.status} ${res.statusText}` }));
+  if (!res.ok) throw new Error(data.error || `${res.status}`);
+  return data;
+}
+
+/* ------------------------------------------------------------------ state -- */
+/* The session lives in the browser because this system has no user model yet.
+   Keyed by problem, so switching problems does not inherit the last one's work. */
+const KEY = "clive.student.v1";
+const S = { boot: null, problem: null, phases: [], i: 0, busy: null, error: null };
+
+const cur = () => S.phases[S.i];
+const phase = () => S.boot.phases[S.i];
+
+function freshSession() {
+  return S.boot.phases.map((p, i) => ({
+    artifact: Object.fromEntries((p.artifact_fields || []).map((f) => [f.id, ""])),
+    attempt: 1, passed: false, unlocked: i === 0,
+    result: null, hint: null, history: [],
+  }));
+}
+
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ problem: S.problem.slug, phases: S.phases, i: S.i }));
+  } catch { /* private mode: the session simply does not survive a reload */ }
+}
+
+function restore(slug) {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (d && d.problem === slug && Array.isArray(d.phases) && d.phases.length === S.boot.phases.length) {
+      S.phases = d.phases;
+      S.i = Math.min(d.i || 0, S.phases.length - 1);
+      return true;
+    }
+  } catch { /* fall through to a fresh session */ }
+  return false;
+}
+
+/* Earlier phases, carried into the prompt as context. A later phase can be asked to
+   account for work done in an earlier one, so the judge needs to have seen it. No
+   criterion is named here on purpose: this file is served to the student, and even a
+   comment naming one puts a piece of the rubric a view-source away. */
+function priorArtifacts() {
+  const out = [];
+  for (let i = 0; i < S.i; i++) {
+    const p = S.boot.phases[i], st = S.phases[i];
+    const fields = (p.artifact_fields || [])
+      .filter((f) => (st.artifact[f.id] || "").trim())
+      .map((f) => ({ label: f.label || f.id, value: st.artifact[f.id] }));
+    if (fields.length) out.push({ label: p.label, fields });
+  }
+  return out;
+}
+
+/* --------------------------------------------------------------- rendering - */
+function renderBrief() {
+  const p = S.problem;
+  const kids = [h("div", { class: "statement", text: p.statement })];
+  if (p.public_test_cases && p.public_test_cases.length) {
+    const tb = h("tbody");
+    for (const c of p.public_test_cases) {
+      tb.append(h("tr", {}, [h("td", { text: c.input }), h("td", { text: c.output })]));
+    }
+    kids.push(h("div", { class: "cases" }, [
+      h("div", { class: "lbl", text: "Examples you were given" }),
+      h("div", { class: "scroll" }, h("table", { class: "iotable" }, [
+        h("thead", {}, h("tr", {}, [h("th", { text: "Input" }), h("th", { text: "Expected output" })])),
+        tb,
+      ])),
+    ]));
+  }
+  document.getElementById("brief-body").replaceChildren(...kids);
+  document.getElementById("title").textContent = p.title;
+}
+
+function renderTrack() {
+  document.getElementById("track").replaceChildren(...S.boot.phases.map((p, i) => {
+    const st = S.phases[i];
+    const cls = st.passed ? "passed" : i === S.i ? "current" : st.unlocked ? "" : "locked";
+    const kids = [
+      h("span", { class: "n", text: `Phase ${i + 1}` }),
+      h("span", { class: "nm", text: p.label }),
+      h("span", { class: "st", text: st.passed ? "Passed" : !st.unlocked ? "Locked"
+        : i === S.i ? `Attempt ${st.attempt}` : "Open" }),
+    ];
+    const go = st.unlocked && i !== S.i && !S.busy;
+    return h(go ? "button" : "div", {
+      class: `step ${cls}`, type: go ? "button" : false,
+      onclick: go ? () => { S.i = i; S.error = null; save(); render(); } : null,
+    }, kids);
+  }));
+}
+
+function renderForm() {
+  const p = phase(), st = cur();
+  const card = h("div", { class: "card" }, [
+    h("h2", {}, [
+      document.createTextNode(p.label),
+      h("span", { class: "attempt", text: st.passed ? "Passed" : `Attempt ${st.attempt}` }),
+    ]),
+  ]);
+  if (p.task_description) card.append(h("div", { class: "task", text: p.task_description.trim() }));
+
+  const fields = h("div", { class: "fields" });
+  for (const f of p.artifact_fields || []) {
+    const ta = h("textarea", {
+      rows: f.rows || 4, "aria-label": f.label || f.id,
+      oninput: (e) => { st.artifact[f.id] = e.target.value; save(); },
+    });
+    ta.value = st.artifact[f.id] || "";
+    fields.append(h("div", { class: "fld" }, [
+      h("label", { text: f.label || f.id }),
+      f.hint ? h("div", { class: "help", text: f.hint }) : null,
+      ta,
+    ]));
+  }
+  card.append(fields);
+
+  const empty = (p.artifact_fields || []).every((f) => !(st.artifact[f.id] || "").trim());
+  const acts = h("div", { class: "actions" }, [
+    h("button", { class: "btn ghost", type: "button", disabled: !!S.busy || !S.boot.has_api_key,
+      text: S.busy === "hint" ? "Thinking…" : "I'm stuck — get a hint", onclick: askHint }),
+    h("button", { class: "btn", type: "button", disabled: !!S.busy || empty || !S.boot.has_api_key,
+      text: S.busy === "submit" ? "Checking…" : "Submit for checking", onclick: submit }),
+  ]);
+  if (st.history.length) {
+    acts.append(h("span", { class: "stat",
+      text: st.history.slice(-3).map((x) => `#${x.n}: ${x.blocked} blocking`).join("  ·  ") }));
+  }
+  card.append(acts);
+  return card;
+}
+
+function renderHint(hint) {
+  return h("div", { class: "fb hint" }, [
+    h("h3", { text: "A place to think" }),
+    h("p", { class: "lead", text: hint.diagnosis }),
+    h("p", { class: "prose", text: hint.hint }),
+    h("div", { class: "foot",
+      text: `This is optional depth — ${hint.criterion_text.replace(/\.$/, "")} — and it is not what is holding you here.` }),
+    h("button", { class: "dismiss", type: "button", text: "Dismiss",
+      onclick: () => { cur().hint = null; save(); render(); } }),
+  ]);
+}
+
+function renderNudge(n) {
+  const list = h("ul", { class: "outstanding" });
+  for (const f of n.failing) {
+    const focus = f.id === n.focus_id;
+    list.append(h("li", { class: focus ? "focus" : "" }, [
+      h("span", { class: "dot" }),
+      h("span", { class: "txt", text: f.text }),
+      focus ? h("span", { class: "here", text: "Start here" }) : null,
+    ]));
+  }
+  return h("div", { class: "fb nudge" }, [
+    h("h3", { text: "What is holding you here" }),
+    h("p", { class: "lead", text: n.summary }),
+    list,
+    h("p", { class: "prose", text: n.nudge }),
+    h("div", { class: "foot", text: `Why this one first: ${n.reason}` }),
+  ]);
+}
+
+function renderLedger(r) {
+  const card = h("div", { class: "fb ledger" }, [h("h3", { text: "Every requirement, checked" })]);
+  for (const v of r.verdicts) {
+    const adv = v.gate === "advisory";
+    const met = v.verdict === "PASS";
+    const badge = met ? ["met", "Met"] : adv ? ["adv", "Depth"] : ["block", "Blocks"];
+    const what = h("div", { class: "what" }, [
+      h("div", { class: "t", text: v.criterion_text || v.criterion_id }),
+      h("div", { class: "cid" }, [
+        h("span", { text: v.criterion_id }),
+        h("span", { class: `gate ${adv ? "advisory" : ""}`, text: adv ? "advisory" : "required" }),
+      ]),
+    ]);
+    if (!met && adv) {
+      what.append(h("div", { class: "norule", text: "Not met — worth a look, but it did not hold you here." }));
+    }
+    if (!met && v.evidence) {
+      what.append(h("blockquote", { text: v.evidence }));
+      if (!v.evidence_found) {
+        what.append(h("div", { class: "norule",
+          text: "This quote is not in what you wrote — worth reading the verdict sceptically." }));
+      }
+    }
+    card.append(h("div", { class: "row" }, [h("span", { class: `badge ${badge[0]}`, text: badge[1] }), what]));
+  }
+  if (r.missing_ids.length) {
+    card.append(h("div", { class: "banner warn", style: "margin:14px 0 0",
+      text: `No ruling came back for: ${r.missing_ids.join(", ")}. That is a fault on our side, not yours — submitting again usually settles it.` }));
+  }
+  return card;
+}
+
+function renderStage() {
+  const stage = document.getElementById("stage");
+  const st = cur();
+  const out = [];
+
+  if (S.error) out.push(h("div", { class: "banner err", text: S.error }));
+  if (!S.boot.has_api_key) {
+    out.push(h("div", { class: "banner muted",
+      text: "No API key is set on the server, so checking and hints are unavailable. Your work is still saved as you type." }));
+  }
+
+  if (!st.unlocked) {
+    stage.replaceChildren(...out, h("div", { class: "card" },
+      h("div", { class: "banner muted", text: `${phase().label} opens once you have passed the phase before it.` })));
+    return;
+  }
+
+  out.push(renderForm());
+
+  if (S.busy) {
+    out.push(h("div", { class: "fb" }, h("div", { class: "thinking" }, [
+      h("span", { class: "pulse" }),
+      h("span", { text: S.busy === "submit"
+        ? "Checking your work against every requirement…"
+        : "Looking for somewhere useful to point…" }),
+    ])));
+  }
+
+  const r = st.result;
+  if (st.passed && r) {
+    const next = S.boot.phases[S.i + 1];
+    const adv = r.advisory_unmet.length;
+    const extra = adv ? ` ${adv} optional point${adv > 1 ? "s" : ""} went unmet — worth a look before you move on.` : "";
+    out.push(h("div", { class: "banner pass",
+      text: (next ? `Phase passed. ${next.label} is open.` : "Phase passed. That was the last one.") + extra }));
+  }
+  if (r && r.nudge) out.push(renderNudge(r.nudge));
+  if (r && r.nudge_error) {
+    out.push(h("div", { class: "banner warn",
+      text: `Your work was checked, but we could not put together a next step: ${r.nudge_error}` }));
+  }
+  if (st.hint) out.push(renderHint(st.hint));
+  if (r) out.push(renderLedger(r));
+
+  if (st.passed && S.i === S.boot.phases.length - 1) {
+    out.push(h("div", { class: "card done" }, [
+      h("h2", { text: "Every phase passed" }),
+      h("p", { text: "You have a definition you wrote yourself, cases you worked by hand, and a plan that accounts for them. Implementation comes next — and you now have something to check it against." }),
+    ]));
+  }
+
+  stage.replaceChildren(...out);
+}
+
+function render() { renderTrack(); renderStage(); }
+
+/* ------------------------------------------------------------------ actions */
+function ctx(extra) {
+  return {
+    phase_id: phase().phase,
+    problem_id: S.problem.slug,
+    artifact: cur().artifact,
+    attempt: cur().attempt,
+    prior_artifacts: priorArtifacts(),
+    ...extra,
+  };
+}
+
+async function askHint() {
+  const st = cur();
+  S.busy = "hint"; S.error = null; st.hint = null; render();
+  try {
+    st.hint = await api("POST", "/api/student/hint", ctx({ history: [] }));
+  } catch (e) {
+    S.error = e.message;
+  } finally {
+    S.busy = null; save(); render();
+  }
+}
+
+async function submit() {
+  const st = cur();
+  S.busy = "submit"; S.error = null; st.hint = null; st.result = null; render();
+  try {
+    const r = await api("POST", "/api/student/submit", ctx({}));
+    st.result = r;
+    st.history.push({ n: st.attempt, blocked: r.blocking.length });
+    if (r.passed) {
+      st.passed = true;
+      if (S.phases[S.i + 1]) S.phases[S.i + 1].unlocked = true;
+    } else {
+      st.attempt += 1;
+    }
+  } catch (e) {
+    S.error = e.message;
+  } finally {
+    S.busy = null; save(); render();
+    document.querySelector(".fb, .banner")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+async function loadProblem(slug, { fresh = false } = {}) {
+  const d = await api("GET", `/api/student/problem/${slug}`);
+  S.problem = d.problem;
+  if (fresh || !restore(slug)) { S.phases = freshSession(); S.i = 0; }
+  S.error = null;
+  document.getElementById("problem-pick").value = slug;
+  renderBrief(); save(); render();
+}
+
+/* --------------------------------------------------------------------- boot */
+(async function start() {
+  try {
+    S.boot = await api("GET", "/api/student/boot");
+  } catch (e) {
+    document.getElementById("stage").replaceChildren(
+      h("div", { class: "banner err", text: `Could not reach the server: ${e.message}` }));
+    return;
+  }
+  if (!S.boot.phases.length || !S.boot.problems.length) {
+    document.getElementById("stage").replaceChildren(h("div", { class: "banner muted",
+      text: "There are no phases or problems set up yet. Add them in the Studio first." }));
+    return;
+  }
+
+  document.getElementById("bar-note").textContent =
+    S.boot.has_api_key ? "your work, checked as you go" : "no API key — checking is off";
+
+  const pick = document.getElementById("problem-pick");
+  pick.replaceChildren(...S.boot.problems.map((p) => h("option", { value: p.slug, text: p.title })));
+  pick.onchange = () => loadProblem(pick.value, { fresh: true });
+
+  document.getElementById("restart").onclick = () => {
+    if (!confirm("Clear everything you have written for this problem and start again?")) return;
+    loadProblem(S.problem.slug, { fresh: true });
+  };
+
+  let slug = S.boot.problems[0].slug;
+  try {
+    const last = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (last && S.boot.problems.some((p) => p.slug === last.problem)) slug = last.problem;
+  } catch { /* first visit */ }
+  await loadProblem(slug);
+})();
+</script>
+</body>
+</html>

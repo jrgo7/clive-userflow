@@ -8,6 +8,10 @@ is what the code below enforces rather than merely hopes for: a hint points at a
 NON-BLOCKING criterion. The model is never shown the gating criteria, so it cannot
 hand the student the requirement they are failing, and `hint()` refuses a reply that
 names anything outside the advisory set it supplied.
+
+That holds because a hint runs with no verdicts in hand. After a judge call it is
+`nudge.py` that speaks, under the opposite restriction — gating criteria only, and only
+ones the student actually failed — because by then those verdicts are already on screen.
 """
 
 from __future__ import annotations
