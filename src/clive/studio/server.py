@@ -14,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+from clive import hint as hinting
 from clive import judge as judging
 from clive import prompts
 from clive.config import EFFORT_CHOICES
@@ -87,6 +88,9 @@ def route(method: str, path: str, body: dict) -> dict:
 
     if parts == ["api", "judge"] and method == "POST":
         return run_judge(body)
+
+    if parts == ["api", "hint"] and method == "POST":
+        return run_hint(body)
 
     if parts == ["api", "promote"] and method == "POST":
         return promote(body)
@@ -176,6 +180,28 @@ def run_judge(body: dict) -> dict:
             body.get("prior_artifacts") or [],
         )
     except judging.JudgeError as exc:
+        raise ApiError(str(exc), 502) from None
+
+
+def run_hint(body: dict) -> dict:
+    """One hint for the artifact in `body`, from the same resolved context the judge
+    uses — so a Sandbox session hints against its scratch criteria, not the saved ones.
+
+    No judge run is required first. A hint reads the artifact, not the verdicts, which
+    is what lets a student ask for one while still staring at an empty form.
+    """
+    phase, problem, criteria = resolve_context(body)
+    try:
+        return hinting.hint(
+            phase,
+            problem,
+            body.get("artifact") or {},
+            criteria,
+            int(body.get("attempt", 1)),
+            body.get("prior_artifacts") or [],
+            body.get("history") or [],
+        )
+    except hinting.JudgeError as exc:
         raise ApiError(str(exc), 502) from None
 
 

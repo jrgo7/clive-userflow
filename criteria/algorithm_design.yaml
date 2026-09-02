@@ -3,14 +3,22 @@
 # The student is writing a plan a human could follow, not code. Criteria here
 # guard against the two usual failure modes: skipping straight to C, and writing
 # steps so vague that they restate the problem instead of solving it.
+#
+#   gate  `gating` is the bare minimum this phase demands: a FAIL holds the student
+#         here for another attempt. `advisory` is the deeper understanding the phase
+#         is trying to build -- judged and reported exactly like any other criterion,
+#         but a FAIL never blocks advancement. An omitted gate is read as `gating`.
+#         Keep advisory criteria genuinely optional: anything the next phase cannot
+#         be attempted without belongs in `gating`, not here.
 
 id: criteria.algorithm_design
 phase: algorithm_design
-version: 1
+version: 2
 
 criteria:
   - id: ordered_steps
     text: The design is a sequence of discrete, ordered steps.
+    gate: gating
     guidance: |
       PASS if the artifact presents steps that are separated and ordered -- numbered,
       bulleted, or joined by explicit sequencing words ('first', 'then', 'after that').
@@ -20,6 +28,7 @@ criteria:
 
   - id: not_c_code
     text: The steps are written in plain language, not C.
+    gate: gating
     guidance: |
       PASS if a reader who does not know C could follow the steps.
       FAIL if the artifact is C source or near-source -- semicolon-terminated
@@ -29,6 +38,7 @@ criteria:
 
   - id: inputs_are_consumed
     text: The steps say how every input is read.
+    gate: gating
     guidance: |
       PASS if the design accounts for reading each input the problem supplies,
       including repetition where the count is read at runtime ('repeat n times:
@@ -38,6 +48,7 @@ criteria:
 
   - id: state_is_named
     text: The values the algorithm must keep track of are identified.
+    gate: gating
     guidance: |
       PASS if the artifact names the quantities carried across steps -- an accumulator,
       a counter, a running best-so-far, an array -- and it is clear what each holds.
@@ -46,8 +57,48 @@ criteria:
 
   - id: output_is_produced
     text: A final step produces the required output in the required form.
+    gate: gating
     guidance: |
       PASS if the last step states what is emitted and matches the output format the
       problem statement fixes (rounding, decimal places, ordering, wording).
       FAIL if the design computes an answer but never says it is output, or if it
       outputs something in a shape the statement does not ask for.
+
+  # ---- Advisory: extra understanding, never blocking -------------------------
+
+  - id: initialisation_is_explicit
+    text: Every value the algorithm accumulates is given a starting value.
+    gate: advisory
+    guidance: |
+      PASS if the artifact says what each carried value starts at -- a total at zero,
+      a counter at one, a best-so-far at the first element.
+      FAIL if a step updates a value the design never started ('add the score to the
+      total', where no step ever set the total).
+      This is where off-by-one and garbage-accumulator bugs are decided, before any
+      code exists. `state_is_named` asks whether the value was identified at all; this
+      asks whether the student knows it has to begin somewhere.
+
+  - id: covers_own_edge_cases
+    text: The steps handle the edge cases the student wrote in the Cases phase.
+    gate: advisory
+    guidance: |
+      PASS if the design would produce the right behaviour for the boundary cases the
+      artifact itself discusses -- a single element, an empty collection, a tie --
+      whether by a step that treats them specially or by a general step that plainly
+      already covers them.
+      FAIL if a boundary the artifact raises would fall through the steps, loop the
+      wrong number of times, or reach a step that does not apply to it.
+      Judge only against edge cases visible in this artifact. If an EARLIER PHASES
+      section is present it is context, never evidence, and a student who mentions no
+      edge case here cannot be failed on one they wrote in a previous phase.
+
+  - id: termination_is_clear
+    text: Every repetition says what ends it.
+    gate: advisory
+    guidance: |
+      PASS if each repeated step states its bound -- a count read from input, the
+      length of a collection, a condition that the steps themselves make false.
+      FAIL if a step repeats 'until done' or 'for each' with nothing establishing what
+      done means or what is being walked.
+      PASS a design with no repetition in it; a straight-line algorithm satisfies this
+      criterion vacuously and must not be marked down for having nothing to terminate.

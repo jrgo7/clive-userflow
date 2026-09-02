@@ -4,14 +4,22 @@
 # The point of this phase is that tracing a case yourself is what exposes the
 # rule you are about to encode -- so these criteria reward shown work, not
 # well-formatted input/output tables.
+#
+#   gate  `gating` is the bare minimum this phase demands: a FAIL holds the student
+#         here for another attempt. `advisory` is the deeper understanding the phase
+#         is trying to build -- judged and reported exactly like any other criterion,
+#         but a FAIL never blocks advancement. An omitted gate is read as `gating`.
+#         Keep advisory criteria genuinely optional: anything the next phase cannot
+#         be attempted without belongs in `gating`, not here.
 
 id: criteria.case_design
 phase: case_design
-version: 1
+version: 2
 
 criteria:
   - id: has_normal_case
     text: At least one typical case is given with a concrete input and a concrete expected output.
+    gate: gating
     guidance: |
       PASS if the artifact contains at least one case where both the input and the
       expected output are literal values a program could actually be run against.
@@ -22,6 +30,7 @@ criteria:
 
   - id: has_edge_case
     text: At least one edge or boundary case is given, and is identified as such.
+    gate: gating
     guidance: |
       PASS if the artifact includes a case at a boundary of the stated constraints --
       the smallest legal input, the largest, a zero, a tie, an empty collection, the
@@ -31,6 +40,7 @@ criteria:
 
   - id: work_is_shown
     text: The expected output is derived, not merely asserted.
+    gate: gating
     guidance: |
       PASS if at least one case shows the intermediate work that produces the output --
       a running total, a comparison, a per-step trace, an arithmetic expression.
@@ -39,8 +49,47 @@ criteria:
 
   - id: outputs_are_correct
     text: Every stated expected output is actually correct for its stated input.
+    gate: gating
     guidance: |
       Compute each case yourself against the problem statement before judging.
       PASS only if every expected output the artifact states is right, including its
       format (decimal places, rounding, units, casing) where the statement fixes one.
       FAIL if any case is wrong, and quote the wrong case as evidence.
+
+  # ---- Advisory: extra understanding, never blocking -------------------------
+
+  - id: cases_are_distinct
+    text: Each case tests something the other cases do not.
+    gate: advisory
+    guidance: |
+      PASS if every case has a reason to exist -- a different branch, a different
+      length, a different sign, a different position of the interesting value.
+      FAIL if two or more cases would exercise the same path with different numbers,
+      so that dropping one would cost the student nothing.
+      Judge what the cases exercise, not how different their digits look: 5 and 7 in
+      the same position of the same shape are one case written twice.
+
+  - id: case_purpose_stated
+    text: Each case says what it is there to check.
+    gate: advisory
+    guidance: |
+      PASS if the artifact gives a reason alongside the cases -- 'this one checks the
+      single-element list', 'this checks rounding down' -- for its cases generally,
+      not necessarily in the same words for each.
+      FAIL if the cases are bare input/output pairs with no statement of intent
+      anywhere, including for the edge case.
+      A label that only restates the input ('n = 1') is not a purpose; a label that
+      says what the input is probing is.
+
+  - id: invalid_input_considered
+    text: Input the problem forbids is considered, and its handling is stated.
+    gate: advisory
+    guidance: |
+      PASS if the artifact takes up input outside the stated constraints -- a negative
+      count, a score above the maximum, an empty collection where one is not allowed --
+      and says what the program should do about it, including a deliberate 'the problem
+      guarantees this cannot happen, so nothing handles it'.
+      FAIL if out-of-range input is never raised at all.
+      This is the one place in the phase where a case need not have a correct expected
+      output: deciding that the behaviour is undefined is itself the answer. Do not
+      fail a student for declining to invent behaviour the statement does not specify.

@@ -31,6 +31,16 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 #: A superseded file, kept beside the current one for the record: `<slug>.v<N>.yaml`.
 ARCHIVE_RE = re.compile(r"\.v\d+$")
 
+#: What a failed criterion costs the student. `gating` is the bare minimum the phase
+#: demands and a FAIL on one holds the student in the phase; `advisory` is reported to
+#: them and recorded, but never blocks advancement. (FR-VER-01 to 03)
+GATES = ("gating", "advisory")
+
+#: An unmarked criterion blocks. A criterion written before this field existed was
+#: written as a requirement, and the safe way to be wrong is to hold a student one
+#: attempt too long -- not to advance them past a phase they never satisfied.
+DEFAULT_GATE = "gating"
+
 
 class ContentError(ValueError):
     """Authored content is missing or malformed. Carries a message meant for the user."""
@@ -248,6 +258,33 @@ def _as_date(value: Any) -> Any:
     return value
 
 
+# -------------------------------------------------------------------------- hint
+
+
+def hint_path() -> Path:
+    return BASE_PROMPTS_DIR / "hint.yaml"
+
+
+def load_hint() -> dict:
+    """The shared hint prompt. One document for every phase — the hint logic reads
+    whichever phase's advisory criteria it is handed, so there is nothing per-phase
+    about it to author."""
+    path = hint_path()
+    if not path.exists():
+        raise ContentError(
+            "The hint prompt is missing. Expected prompts/base/hint.yaml."
+        )
+    data = read_yaml(path)
+    for key in ("system_prompt", "user_template"):
+        if not str(data.get(key, "")).strip():
+            raise ContentError(f"prompts/base/hint.yaml has no {key}.")
+    model = data.setdefault("model", {})
+    model.setdefault("id", get_provider().default_model)
+    model.setdefault("effort", "medium")
+    model.setdefault("max_output_tokens", 2000)
+    return data
+
+
 # ---------------------------------------------------------------------- criteria
 
 
@@ -261,6 +298,8 @@ def load_criteria(phase: str) -> dict:
         return {"id": f"criteria.{phase}", "phase": phase, "version": 1, "criteria": []}
     data = read_yaml(path)
     data.setdefault("criteria", [])
+    for item in data["criteria"]:
+        item.setdefault("gate", DEFAULT_GATE)
     return data
 
 
@@ -277,10 +316,16 @@ def save_criteria(phase: str, data: dict) -> dict:
         seen.add(cid)
         if not str(item.get("text", "")).strip():
             raise ContentError(f"Criterion {cid!r} has no text.")
+        gate = str(item.get("gate") or DEFAULT_GATE).strip()
+        if gate not in GATES:
+            raise ContentError(
+                f"Criterion {cid!r} has gate {gate!r}; expected one of {', '.join(GATES)}."
+            )
         cleaned.append(
             {
                 "id": cid,
                 "text": str(item["text"]).strip(),
+                "gate": gate,
                 "guidance": _as_block(item.get("guidance", "")),
             }
         )
@@ -294,6 +339,16 @@ def save_criteria(phase: str, data: dict) -> dict:
     path = criteria_path(phase)
     write_yaml(path, ordered, read_header(path))
     return load_criteria(phase)
+
+
+def advisory_criteria(criteria: list[dict]) -> list[dict]:
+    """The criteria a hint may point at: the non-blocking ones.
+
+    Pointing a stuck student at the requirement they are failing hands them the
+    answer. The gating criteria are therefore not merely deprioritised here, they
+    are never shown to the model at all.
+    """
+    return [c for c in criteria if c.get("gate", DEFAULT_GATE) == "advisory"]
 
 
 def _as_block(text: str) -> str:
@@ -416,6 +471,36 @@ def render_user_prompt(
         criteria_to_judge=criteria,
         attempt=attempt,
         prior_artifacts=prior_artifacts or [],
+    )
+
+
+def render_hint_prompt(
+    hint_doc: dict,
+    phase: dict,
+    problem: dict,
+    artifact: dict,
+    criteria: list[dict],
+    attempt: int = 1,
+    prior_artifacts: list[dict] | None = None,
+    history: list[dict] | None = None,
+) -> str:
+    """Render the shared hint template.
+
+    `criteria` is the advisory subset the model may choose from — see `advisory_criteria`.
+    `history` is the conversation seam: a list of `{"role": ..., "text": ...}` turns,
+    guarded in the template by `{% if history %}` so omitting it renders the single-shot
+    prompt unchanged.
+    """
+    template = jinja_env().from_string(hint_doc["user_template"])
+    return template.render(
+        phase=phase,
+        problem=problem,
+        artifact=artifact or {},
+        artifact_fields=phase.get("artifact_fields") or [],
+        criteria=criteria,
+        attempt=attempt,
+        prior_artifacts=prior_artifacts or [],
+        history=history or [],
     )
 
 

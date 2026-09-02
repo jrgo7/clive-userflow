@@ -4,14 +4,22 @@
 # `version` is what cases/suites/*.yaml pins as `criteria_version` -- bump it
 # whenever a criterion's text or guidance changes, so a suite recorded against
 # the old rubric is not silently re-interpreted against the new one.
+#
+#   gate  `gating` is the bare minimum this phase demands: a FAIL holds the student
+#         here for another attempt. `advisory` is the deeper understanding the phase
+#         is trying to build -- judged and reported exactly like any other criterion,
+#         but a FAIL never blocks advancement. An omitted gate is read as `gating`.
+#         Keep advisory criteria genuinely optional: anything the next phase cannot
+#         be attempted without belongs in `gating`, not here.
 
 id: criteria.problem_definition
 phase: problem_definition
-version: 1
+version: 2
 
 criteria:
   - id: novel_wording
     text: The summary uses different words than the prompt.
+    gate: gating
     guidance: |
       PASS if the summary restates the task in the student's own phrasing.
       FAIL if it is largely copied spans from the problem statement, even when reordered.
@@ -20,6 +28,7 @@ criteria:
 
   - id: concrete_types
     text: Types must be specific and concrete.
+    gate: gating
     guidance: |
       PASS if each input and output names a definite type a C programmer could declare --
       'int', 'float', 'array of 10 ints', 'null-terminated string'.
@@ -28,8 +37,47 @@ criteria:
 
   - id: constraints_noted
     text: Some constraints must be noted, or explicitly described as absent.
+    gate: gating
     guidance: |
       PASS if the artifact states at least one real constraint (value ranges, input size,
       sign, precision, ordering) OR explicitly says the problem states no constraints.
       FAIL if constraints are simply never mentioned -- silence is not the same as
       declaring there are none.
+
+  # ---- Advisory: extra understanding, never blocking -------------------------
+
+  - id: input_order_stated
+    text: The order the program reads its inputs is stated.
+    gate: advisory
+    guidance: |
+      PASS if the artifact makes the reading order recoverable -- numbering the inputs,
+      saying which is read first, or describing a count that is read before the values
+      it governs.
+      FAIL if the inputs are an unordered list and nothing indicates which arrives first.
+      A student who has noticed that a leading count controls how much is read afterwards
+      has understood the input shape, not just its types. Do not credit ordering that is
+      merely implied by the order of the lines; the artifact has to say it.
+
+  - id: output_form_exact
+    text: The output is pinned down to the exact form it must be printed in.
+    gate: advisory
+    guidance: |
+      PASS if the artifact fixes the printed form beyond naming a type -- decimal places,
+      rounding, units, surrounding wording, separators, casing -- for every part of the
+      output the problem statement constrains.
+      FAIL if the output is given only as a type or a quantity ('the average', 'a float')
+      where the statement fixes a format.
+      If the statement genuinely fixes no format, PASS an artifact that says so, and do
+      not require a student to invent one.
+
+  - id: restates_ambiguity
+    text: Anything the problem statement leaves undecided is called out.
+    gate: advisory
+    guidance: |
+      PASS if the artifact names a question the statement does not settle -- an
+      unspecified tie-break, an undefined empty-input case, a rounding rule left open,
+      a range the statement never bounds -- and says what it will assume.
+      FAIL if the artifact reads as though every question were settled when the statement
+      leaves one open, or if it names an ambiguity but states no assumption for it.
+      A statement can be genuinely complete. PASS an artifact that says it found no
+      ambiguity, and never invent one to mark the student down for missing.

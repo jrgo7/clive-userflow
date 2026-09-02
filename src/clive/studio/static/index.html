@@ -129,6 +129,9 @@ pre.preview {
 .badge { font-weight: 700; font-size: 12px; padding: 3px 9px; border-radius: 6px; height: fit-content; letter-spacing: .4px; }
 .badge.PASS { background: var(--pass-bg); color: var(--pass); }
 .badge.FAIL { background: var(--fail-bg); color: var(--fail); }
+.gate { font-size: 11px; letter-spacing: .3px; text-transform: uppercase; color: var(--ink-2);
+        background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px;
+        padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
 .verdict .body { flex: 1; min-width: 0; }
 .verdict .cid { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
 .verdict .meta { color: var(--ink-2); font-size: 12px; margin: 2px 0 6px; }
@@ -139,6 +142,12 @@ pre.preview {
 }
 .note { padding: 9px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 10px; }
 .note.warn { background: var(--warn-bg); color: var(--warn); }
+.hint-card { border-left: 3px solid var(--accent); }
+.hint-card .diagnosis { font-size: 15px; line-height: 1.45; margin-bottom: 10px; }
+.hint-card .body { white-space: pre-wrap; }
+.hint-card .points-at { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
+                        font-size: 12.5px; color: var(--ink-2); }
+.hint-card .cid { font-family: var(--mono); font-size: 12px; font-weight: 600; }
 .empty { color: var(--ink-2); font-style: italic; padding: 6px 0; }
 .hint { color: var(--ink-2); font-size: 12px; margin-top: 4px; }
 .tag { font-family: var(--mono); font-size: 12px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
@@ -216,7 +225,7 @@ const S = {
   problemSlug: null, problem: null,
   tab: "criteria",
   dirty: { criteria: false, problem: false, prompt: false },
-  preview: null, result: null, running: false,
+  preview: null, result: null, running: false, hinting: false,
   // "files": S.phase / S.criteria / S.problem come from the server and saves write
   // YAML. "sandbox": they are references into S.sandbox and nothing touches disk.
   // The editors are identical either way — only the source and the save differ.
@@ -654,10 +663,22 @@ function renderBar() {
   if (S.tab === "problem") kids.push(saveButton("problem", saveProblem));
   if (S.tab === "prompt") kids.push(saveButton("prompt", savePhase));
   if (S.tab === "run" || S.tab === "session") {
+    const busy = S.running || S.hinting;
+    if (S.tab === "session") {
+      // A hint reads the artifact, not the verdicts, so it is offered from the first
+      // moment the form is on screen rather than only after a failed submit.
+      const h = el("button", {
+        className: "act ghost",
+        textContent: S.hinting ? "Thinking…" : "I'm stuck — get a hint",
+        disabled: busy || !S.boot.has_api_key || !sess().unlocked,
+      });
+      h.onclick = askHint;
+      kids.push(h);
+    }
     const b = el("button", {
       className: "act",
       textContent: S.running ? "Judging…" : S.tab === "session" ? "Submit for judging" : "Run judge",
-      disabled: S.running || !S.boot.has_api_key,
+      disabled: busy || !S.boot.has_api_key,
     });
     b.onclick = S.tab === "session" ? submitSession : runJudge;
     kids.push(b);
@@ -766,6 +787,9 @@ function renderCriteria() {
         field("id", textInput(item.id, (v) => { item.id = v; markDirty("criteria"); }, { mono: true, placeholder: "lower_snake_case" })),
         field("text (the rule, as one sentence)", textInput(item.text, (v) => { item.text = v; markDirty("criteria"); })),
       ]),
+      field("gate", selectInput(item.gate || "gating", GATES, (v) => { item.gate = v; markDirty("criteria"); }),
+        "gating: a FAIL holds the student in this phase. advisory: judged and reported, "
+        + "but never blocks advancement."),
       field("guidance (when to PASS, when to FAIL)",
         textArea(item.guidance, (v) => { item.guidance = v; markDirty("criteria"); }, 5)),
     ]));
@@ -773,7 +797,7 @@ function renderCriteria() {
 
   const add = el("button", { className: "act ghost", textContent: "+ Add criterion" });
   add.onclick = () => {
-    S.criteria.criteria.push({ id: "", text: "", guidance: "" });
+    S.criteria.criteria.push({ id: "", text: "", gate: "gating", guidance: "" });
     markDirty("criteria");
     render();
   };
@@ -1126,10 +1150,15 @@ function renderResult(r) {
     card.append(el("div", { className: "note warn", textContent: `Judge invented criterion ids: ${r.unexpected_ids.join(", ")}` }));
   }
 
+  const byId = Object.fromEntries((S.criteria.criteria || []).map((c) => [c.id, c]));
   for (const v of r.verdicts) {
+    const cid = el("div", { className: "cid", textContent: v.criterion_id });
+    const advisory = isAdvisory(byId[v.criterion_id]);
+    if (advisory) cid.append(el("span", { className: "gate", textContent: "advisory" }));
     const body = el("div", { className: "body" }, [
-      el("div", { className: "cid", textContent: v.criterion_id }),
-      el("div", { className: "meta", textContent: `confidence: ${v.confidence}` }),
+      cid,
+      el("div", { className: "meta", textContent: `confidence: ${v.confidence}`
+        + (advisory && v.verdict === "FAIL" ? " · does not block advancement" : "") }),
     ]);
     if (v.evidence) {
       body.append(el("blockquote", { textContent: v.evidence }));
@@ -1175,6 +1204,11 @@ async function runJudge() {
 // --------------------------------------------------------------------- rubric
 
 const STATE_LABEL = { PASS: "PASS", FAIL: "FAIL", stale: "STALE", unjudged: "—" };
+
+// Mirrors GATES in prompts.py. A criterion with no gate blocks, matching DEFAULT_GATE
+// there: content written before the field existed was written as a requirement.
+const GATES = ["gating", "advisory"];
+const isAdvisory = (criterion) => (criterion || {}).gate === "advisory";
 
 function renderRubric() {
   const out = el("div");
@@ -1250,10 +1284,16 @@ function summaryLine(t) {
 }
 
 function rubricRow(group, criterion, st) {
+  const head = el("div", { className: "cid", textContent: criterion.id });
+  if (isAdvisory(criterion)) head.append(el("span", { className: "gate", textContent: "advisory" }));
   const body = el("div", { className: "body" }, [
     el("div", { textContent: criterion.text || "(no text)" }),
-    el("div", { className: "cid", textContent: criterion.id }),
+    head,
   ]);
+  if (isAdvisory(criterion) && st.state === "FAIL") {
+    body.append(el("div", { className: "meta", style: "margin-top:4px", textContent:
+      "Not met — reported to the student, but it did not hold them in the phase." }));
+  }
 
   if (st.state === "stale") {
     body.append(el("div", { className: "note warn", style: "margin-top:6px", textContent:
@@ -1409,6 +1449,7 @@ function renderSession() {
   }
   out.append(form);
 
+  if (st.hint) out.append(renderHint(st.hint));
   if (S.result) out.append(renderResult(S.result));
   if (st.transcript.length > 1 || (st.transcript.length === 1 && !S.result)) {
     out.append(renderTranscript(st));
@@ -1433,6 +1474,54 @@ function renderTranscript(st) {
   return card;
 }
 
+function renderHint(h) {
+  const card = el("div", { className: "card hint-card" }, [
+    el("h3", { textContent: "Hint" }),
+    el("div", { className: "diagnosis", textContent: h.diagnosis }),
+    el("div", { className: "body", textContent: h.hint }),
+  ]);
+
+  // Naming the criterion, and saying it is not the blocker, is the honest version:
+  // the student is being pointed at depth, not told why they failed.
+  card.append(el("div", { className: "points-at" }, [
+    el("span", { textContent: "Points at " }),
+    el("span", { className: "cid", textContent: h.criterion_id }),
+    el("span", { className: "gate", textContent: "advisory" }),
+    el("div", { style: "margin-top:4px", textContent:
+      `${h.criterion_text} — optional depth, not what is holding you here.` }),
+  ]));
+
+  const dismiss = el("button", { className: "mini", textContent: "Dismiss" });
+  dismiss.onclick = () => { sess().hint = null; writeSandbox(); render(); };
+  card.append(el("div", { style: "margin-top:10px" }, [dismiss]));
+  return card;
+}
+
+async function askHint() {
+  const st = sess();
+  S.hinting = true; renderBar();
+  say("Looking for something to point at…");
+  try {
+    // No verdicts are sent: a hint reads what the student wrote, which is what lets
+    // one be asked for before the first submit. `history` is the conversation seam —
+    // empty today, so the server renders the single-shot prompt.
+    const h = await api("POST", "/api/hint", judgeContext({
+      artifact: st.artifact,
+      attempt: st.attempt,
+      prior_artifacts: priorArtifacts(),
+      history: [],
+    }));
+    st.hint = h;
+    writeSandbox();
+    say(`Hint given on ${h.criterion_id}.`, "ok");
+  } catch (e) {
+    say(e.message, "err");
+  } finally {
+    S.hinting = false;
+    render();
+  }
+}
+
 async function submitSession() {
   const st = sess();
   S.running = true; S.result = null; renderBar();
@@ -1445,18 +1534,29 @@ async function submitSession() {
     }));
     S.result = r;
     st.transcript.push({ attempt: st.attempt, artifact: { ...st.artifact }, verdicts: r.verdicts });
+    st.hint = null;  // it was about the artifact as it stood before this submission
     recordStatus(r.verdicts, S.criteria.criteria, st.attempt);
 
-    const failed = r.verdicts.filter((v) => v.verdict === "FAIL").length;
+    // Only a gating criterion holds the student here. An advisory FAIL is judged,
+    // recorded, and shown with the rest, but it is feedback on depth rather than a
+    // statement that the phase was not met, so it must not cost an attempt.
+    const byId = Object.fromEntries((S.criteria.criteria || []).map((c) => [c.id, c]));
+    const failed = r.verdicts.filter((v) => v.verdict === "FAIL");
+    const blocking = failed.filter((v) => !isAdvisory(byId[v.criterion_id]));
     // A missing verdict is not a pass: the judge failed to rule on that criterion.
-    if (failed === 0 && !r.missing_ids.length) {
+    // That holds whatever the criterion's gate — an advisory rule the judge skipped
+    // is a broken judge contract, not an advisory FAIL, so it blocks like any other.
+    if (!blocking.length && !r.missing_ids.length) {
       st.passed = true;
       const nxt = nextPhase();
       if (nxt) sess(nxt.phase).unlocked = true;
-      say(nxt ? `All criteria passed — ${nxt.label} unlocked.` : "All criteria passed — session complete.", "ok");
+      const extra = failed.length ? ` ${failed.length} advisory not met — worth a look.` : "";
+      say((nxt ? `Phase passed — ${nxt.label} unlocked.` : "Phase passed — session complete.") + extra, "ok");
     } else {
       st.attempt += 1;
-      say(`${failed} of ${r.verdicts.length} criteria failed — now on attempt ${st.attempt}.`, "err");
+      const advisory = failed.length - blocking.length;
+      const extra = advisory ? ` (${advisory} advisory, not blocking)` : "";
+      say(`${blocking.length} of ${r.verdicts.length} criteria failed${extra} — now on attempt ${st.attempt}.`, "err");
     }
     writeSandbox();
   } catch (e) {

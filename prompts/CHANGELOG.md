@@ -2,6 +2,77 @@
 
 > Please update this file whenever prompts are changed by documenting why each version changed.
 
+## base/hint.yaml v1 - the hint call - 2026-09-01
+
+**A stuck student can ask for one hint.** It names a single criterion to improve, and
+comes with one sentence saying why the student appears stuck. New file
+`prompts/base/hint.yaml` holds the system prompt and template; `src/clive/hint.py`
+makes the call, mirroring `judge.py`.
+
+**The hint may only ever point at an advisory criterion,** and the model is not shown
+the gating ones at all. Pointing a stuck student at the requirement they are failing
+hands them the answer, which is the one thing this system exists not to do; naming
+optional depth instead gives them somewhere to think from, and the work of getting
+there is usually what surfaces the blocking gap themselves. This is enforced in code,
+not just asked for in the prompt: `advisory_criteria` selects the offered set inside
+`hint()` so no caller can widen it, and a reply naming anything outside that set is
+refused rather than shown.
+
+**One shared document, not one per phase.** The hint logic is phase-independent -- it
+reads whichever phase's advisory criteria it is handed -- so writing it out three times
+would only let three copies drift. It does not compose `base/preamble.v1.md`, which is
+written for judging (three verdicts, one per criterion, evidence spans) and would
+contradict this job; the doctrine the two share is "name what is missing, never supply
+it", and an edit to one wants the same edit in the other.
+
+**It pins no `model.id`.** Every phase pins its own, but a shared document naming an
+Anthropic model would be wrong at a repo running on DeepSeek, so the call falls back to
+whichever provider `CLIVE_PROVIDER` selects and that provider's default.
+
+**No judge run is required first.** The hint reads the artifact, never the verdicts,
+which is what lets a student ask for one while still staring at an empty form. It is
+offered on demand from an "I'm stuck" button rather than pushed after a failed submit.
+
+**The conversation seam is `history`.** Diagnosis should eventually be a dialogue. The
+parameter is threaded through `hint()` and rendered by a `{% if history %}` block, so
+passing a transcript works today and passing nothing renders exactly the single-shot
+prompt. True multi-turn also needs the provider seam to take a message list instead of
+one `user` string, which it does not yet.
+
+## Gating and advisory criteria: all three rubrics v1 -> v2 - 2026-09-01
+
+**Criteria now declare what a failure costs.** `criteria/<phase>.yaml` gains a `gate` field
+per criterion, using the vocabulary `criteria/catalog.yaml` already defined for it:
+`gating` is the bare minimum the phase demands, and a FAIL holds the student there for
+another attempt; `advisory` is judged and reported exactly like any other criterion but
+never blocks advancement. Every criterion that existed before this change is `gating` —
+they were all written as requirements — and an omitted `gate` is read as `gating`, so the
+safe way to be wrong is to hold a student one attempt too long rather than advance them
+past a phase they never satisfied.
+
+**Three advisory criteria added per phase**, covering the understanding each phase is
+trying to build rather than the floor it enforces: input ordering, exact output form, and
+named ambiguity in Problem; case distinctness, stated case purpose, and out-of-range input
+in Cases; explicit initialisation, coverage of the student's own edge cases, and loop
+termination in Design. Each one's guidance says what an honest PASS looks like when the
+problem statement offers nothing to find — a student must not be marked down for declining
+to invent an ambiguity, a format, or a loop that is not there.
+
+**The Sandbox advancement rule now reads the gate.** It previously required every verdict
+to be PASS, which would have made a new advisory criterion block exactly like a gating one
+— the opposite of what the field means. Only gating failures cost an attempt now. A
+*missing* verdict still blocks whatever the gate: a judge that skips a criterion has broken
+its contract, which is not the same as an advisory FAIL.
+
+**`gate` is not sent to the judge.** The judge rules on one criterion at a time against its
+own text and guidance; telling it that a rule is optional invites leniency on that rule.
+Which failures block is an advancement decision, made from the verdicts afterwards.
+
+**`save_criteria` preserves and validates it.** It rebuilds each criterion from a fixed set
+of keys, so a `gate` written by hand would have been silently dropped by the next Studio
+save — the same accident that once emptied the problem_definition changelog. An unknown
+value is refused rather than coerced.
+
 ## Sandbox support: problem_definition v3 -> v4, case_design and algorithm_design v1 -> v2 - 2026-08-20
 
 **`task_description` added to every phase.** The phases described what the *judge* should do
