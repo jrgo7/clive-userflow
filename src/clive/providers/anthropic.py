@@ -21,6 +21,7 @@ class AnthropicProvider(Provider):
         "claude-haiku-4-5",
     ]
     api_key_env = "ANTHROPIC_API_KEY"
+    model_prefixes = ("claude-",)
 
     def judge_json(
         self,

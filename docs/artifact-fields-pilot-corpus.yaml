@@ -1,0 +1,480 @@
+# Pilot corpus for docs/artifact-fields-pilot.md, Step 0.
+#
+# One entry per phase. Each artifact carries:
+#   fields      the student's answer, stored in the CURRENT layout's boxes
+#               (P1 / C1 / D1) plus any extra box a candidate needs.
+#   labels      the ground-truth PASS/FAIL you would give each criterion.
+#               These are Claude's proposed labels — review and correct every
+#               one before Step 3; your judgement is the measurement standard.
+#   borderline  criteria where you expect the judge to wobble run-to-run.
+#               `labels` still holds a definite call (the stricter reading).
+#   note        why the artifact is in the set / what it isolates.
+#
+# All artifacts target problem.grade_average:
+#   Read int n (>= 1), then n real scores (each 0..100). Print their average
+#   rounded to two decimals.
+#
+# This file is not a suite fixture — it is paste material for the Run tab.
+# After the pilot, the winners' artifacts + your final labels move into
+# cases/suites/<phase>.yaml (Step 5).
+
+# ===========================================================================
+problem_definition:
+  criteria: [novel_wording, concrete_types, constraints_noted]
+
+  # Field mapping per candidate:
+  #   P1  paste `inputs` + `constraints` together into the single Inputs box.
+  #   P2  Inputs box = `inputs`; new Constraints box (last) = `constraints`.
+  #   P3  same as P2 but the Constraints box sits between Inputs and Outputs.
+  artifacts:
+    - id: PD-1
+      role: clean pass
+      fields:
+        summary: |
+          I need to work out the class's mean score. The program reads how many
+          students there are, then reads each student's mark, adds them up and
+          divides by the count.
+        inputs: |
+          int n (the student count), then n floats, one score per student.
+        outputs: |
+          A single float: the mean of the n scores, printed to two decimal places.
+        constraints: |
+          n is at least 1, and every score is between 0 and 100 inclusive.
+      labels: {novel_wording: PASS, concrete_types: PASS, constraints_noted: PASS}
+      borderline: []
+      note: Happy path. Own phrasing, declarable types, a stated range and count.
+
+    - id: PD-2
+      role: isolates novel_wording (FAIL)
+      fields:
+        summary: |
+          A teacher wants to know the average score of the students in a class.
+          Read an integer n, the number of students in the class. Then read n
+          scores, one per student, each a real number.
+        inputs: |
+          int n (student count), then n floats, one per student.
+        outputs: |
+          A single float, the average, to two decimal places.
+        constraints: |
+          n >= 1 and every score is between 0 and 100 inclusive.
+      labels: {novel_wording: FAIL, concrete_types: PASS, constraints_noted: PASS}
+      borderline: []
+      note: >
+        Summary is contiguous spans lifted from the statement; everything else is
+        fine. Guards against a judge that rubber-stamps a well-formed artifact.
+
+    - id: PD-3
+      role: isolates concrete_types (FAIL)
+      fields:
+        summary: |
+          Work out the mean of a set of exam marks. The program is first told how
+          many marks to expect, then reads them one by one and reports their
+          average.
+        inputs: |
+          A count of marks, then that many marks; there is at least one mark and
+          every mark is between 0 and 100.
+        outputs: |
+          The resulting average figure.
+        constraints: |
+          At least one mark; each mark is between 0 and 100.
+      labels: {novel_wording: PASS, concrete_types: FAIL, constraints_noted: PASS}
+      borderline: []
+      note: >
+        Own wording and a real constraint, but "a count", "marks", "average
+        figure" name no type a C programmer could declare.
+
+    - id: PD-4
+      role: isolates constraints_noted (FAIL)
+      fields:
+        summary: |
+          Figure out the average mark for a class. First the program is told how
+          many students sat the test, then it reads that many marks and reports
+          their mean.
+        inputs: |
+          An int for the number of students, then that many float values, one
+          mark each.
+        outputs: |
+          A float - the mean mark - shown to two decimal places.
+        constraints: ""
+      labels: {novel_wording: PASS, concrete_types: PASS, constraints_noted: FAIL}
+      borderline: []
+      note: >
+        Own wording, declarable types, but the value ranges and the "at least
+        one" guarantee are never mentioned and never declared absent. Silence,
+        not "there are none".
+
+    - id: PD-5
+      role: borderline (novel_wording)
+      fields:
+        summary: |
+          The class average is what a teacher wants to know. An integer n is
+          read, being how many students there are in the class, and then n
+          scores get read, one for each student, every one of them a real
+          number.
+        inputs: |
+          int n, then n float scores.
+        outputs: |
+          One float, the average, to two decimal places.
+        constraints: ""
+      labels: {novel_wording: FAIL, concrete_types: PASS, constraints_noted: FAIL}
+      borderline: [novel_wording]
+      note: >
+        Reorders the statement and swaps a few words but keeps its clause
+        structure. Strict reading: not the student's own phrasing (FAIL). Expect
+        the judge to split between runs. Also silent on constraints.
+
+    - id: PD-6
+      role: robustness - empty boxes
+      fields:
+        summary: |
+          Add up everyone's marks and divide to get the class average.
+        inputs: ""
+        outputs: ""
+        constraints: ""
+      labels: {novel_wording: PASS, concrete_types: FAIL, constraints_noted: FAIL}
+      borderline: []
+      note: >
+        Summary only. Checks the judge does not invent content for empty boxes,
+        and that unmentioned constraints FAIL rather than being credited. More
+        boxes = more empty-box surface, so this artifact discriminates P1 (3
+        boxes) from P2/P3 (4 boxes).
+
+# ===========================================================================
+case_design:
+  criteria: [has_normal_case, has_edge_case, work_is_shown, outputs_are_correct]
+
+  # Field mapping per candidate:
+  #   C1  fields as stored below (traces are inline in the case boxes).
+  #   C2  pull every "Trace: ..." line out of normal_cases / edge_cases into a
+  #       new Traces box; leave input+output pairs behind.
+  #   C3  concatenate normal_cases + edge_cases into one Cases box, keeping the
+  #       "edge case because ..." labels inline. reasoning box unchanged.
+  artifacts:
+    - id: CD-1
+      role: clean pass
+      fields:
+        normal_cases: |
+          Input: 3 students, scores 90 80 70. Expected output: 80.00
+          Trace: total starts at 0. +90 -> 90. +80 -> 170. +70 -> 240.
+          240 / 3 = 80. Two decimals -> 80.00
+
+          Input: 4 students, scores 100 0 100 0. Expected output: 50.00
+          Trace: total 0 -> 100 -> 100 -> 200 -> 200. 200 / 4 = 50 -> 50.00
+        edge_cases: |
+          Input: 1 student, score 55.5. Expected output: 55.50
+          Trace: n is 1 so the loop runs once. total 0 -> 55.5. 55.5 / 1 = 55.5
+          -> 55.50. This is a boundary: n = 1 is the smallest class the problem
+          allows.
+        reasoning: |
+          The n=1 case checks the loop still works when it runs once and nothing
+          is averaged over multiple values. The 100/0 case exercises both ends of
+          the allowed score range in one input.
+      labels:
+        has_normal_case: PASS
+        has_edge_case: PASS
+        work_is_shown: PASS
+        outputs_are_correct: PASS
+      borderline: []
+      note: Two traced normal cases, a labelled boundary case, all outputs correct.
+
+    - id: CD-2
+      role: isolates work_is_shown (FAIL)
+      fields:
+        normal_cases: |
+          Input: 3 scores 90 80 70 -> 80.00. The average of 90, 80 and 70 is
+          80.00.
+          Input: 4 scores 70 70 70 70 -> 70.00. They are all 70 so the average
+          is 70.
+        edge_cases: |
+          Input: 1 score 55.5 -> 55.50. There is one score so the average is
+          55.50. Edge case: smallest allowed class size.
+        reasoning: |
+          Covers a normal multi-value case and the single-student case.
+      labels:
+        has_normal_case: PASS
+        has_edge_case: PASS
+        work_is_shown: FAIL
+        outputs_are_correct: PASS
+      borderline: []
+      note: >
+        Outputs are right and a boundary is labelled, but every "trace" just
+        restates the input and the answer - no running total, no substitution.
+
+    - id: CD-3
+      role: isolates outputs_are_correct (FAIL)
+      fields:
+        normal_cases: |
+          Input: 3 scores 90 80 70 -> 80.00
+          Trace: 90 + 80 + 70 = 240, and 240 / 3 = 80, printed as 80.00
+
+          Input: 4 scores 10 20 30 40 -> 30.00
+          Trace: 10 + 20 + 30 + 40 = 100, and 100 / 4 = 30, printed as 30.00
+        edge_cases: |
+          Input: 1 score 88 -> 88.00
+          Trace: one score, so the average is 88 -> 88.00. Edge case: smallest
+          class.
+        reasoning: |
+          A three-value and a four-value case plus the single-student boundary.
+      labels:
+        has_normal_case: PASS
+        has_edge_case: PASS
+        work_is_shown: PASS
+        outputs_are_correct: FAIL
+      borderline: []
+      note: >
+        Second case: 100 / 4 = 25.00, not 30.00. The judge has to compute it -
+        the trace states the wrong quotient confidently. Quote the wrong case.
+
+    - id: CD-4
+      role: isolates has_edge_case (FAIL)
+      fields:
+        normal_cases: |
+          Input: 3 scores 70 75 80 -> 75.00. Trace: 70+75+80 = 225. 225/3 = 75
+          -> 75.00
+          Input: 3 scores 60 65 70 -> 65.00. Trace: 60+65+70 = 195. 195/3 = 65
+          -> 65.00
+          Input: 4 scores 50 60 70 80 -> 65.00. Trace: 50+60+70+80 = 260.
+          260/4 = 65 -> 65.00
+        edge_cases: ""
+        reasoning: |
+          Three mid-range cases with two different class sizes.
+      labels:
+        has_normal_case: PASS
+        has_edge_case: FAIL
+        work_is_shown: PASS
+        outputs_are_correct: PASS
+      borderline: []
+      note: >
+        Every case is an unremarkable mid-range value; the edge box is empty.
+        Guards against crediting quantity of cases as coverage.
+
+    - id: CD-5
+      role: isolates has_normal_case (FAIL) - abstract descriptions
+      fields:
+        normal_cases: |
+          A typical case is a class of several students with a mix of high and
+          low scores; the program outputs their average. Another is a class where
+          everyone scored the same, which gives that score as the average.
+        edge_cases: |
+          The smallest case is a class of one student - the average is just that
+          student's score.
+        reasoning: |
+          These cover the general behaviour and the minimum class size.
+      labels:
+        has_normal_case: FAIL
+        has_edge_case: FAIL
+        work_is_shown: FAIL
+        outputs_are_correct: PASS
+      borderline: [has_edge_case]
+      note: >
+        Cases are described in the abstract with no literal input or output a
+        program could run against, so nothing is a designed case and nothing is
+        traced. outputs_are_correct is vacuously PASS (no concrete output is
+        stated to be wrong). has_edge_case names the boundary but gives no
+        concrete case - a lenient judge might pass it.
+
+    - id: CD-6
+      role: borderline (outputs_are_correct) - unspecified rounding
+      fields:
+        normal_cases: |
+          Input: 2 scores 80.00 80.01 -> 80.01
+          Trace: 80.00 + 80.01 = 160.01. 160.01 / 2 = 80.005. Rounding to two
+          decimals gives 80.01.
+        edge_cases: |
+          Input: 1 score 0 -> 0.00
+          Trace: single score 0 -> 0.00. Edge: minimum score and minimum class
+          size together.
+        reasoning: |
+          The 80.005 case probes how a halfway value rounds; the 0 case is the
+          low end of both score and class size.
+      labels:
+        has_normal_case: PASS
+        has_edge_case: PASS
+        work_is_shown: PASS
+        outputs_are_correct: PASS
+      borderline: [outputs_are_correct]
+      note: >
+        80.005 -> 80.01 assumes round-half-up; the statement does not fix
+        half-way behaviour, so 80.00 is equally defensible. Strict label: PASS
+        (the working is sound and the statement does not contradict it). Expect
+        wobble.
+
+# ===========================================================================
+algorithm_design:
+  criteria: [ordered_steps, not_c_code, inputs_are_consumed, state_is_named, output_is_produced]
+
+  # Field mapping per candidate:
+  #   D1  fields as stored below.
+  #   D2  move the "read" steps (read n; read the next score) out of `steps`
+  #       into a new Inputs-read box (first). `steps` keeps the rest.
+  #   D3  append the `output_step` text as the final numbered step of `steps`;
+  #       drop the separate Output box. `state` box unchanged.
+  artifacts:
+    - id: AD-1
+      role: clean pass
+      fields:
+        steps: |
+          1. Read the student count and call it n.
+          2. Set a running total to 0.
+          3. Repeat steps 4-5 n times, once per student.
+          4. Read the next score.
+          5. Add that score to the running total.
+          6. Divide the running total by n to get the average.
+        state: |
+          running total - the sum of the scores read so far, starts at 0.
+          n - the number of students, read once at the start.
+          average - the running total divided by n.
+        output_step: |
+          Write the average with exactly two digits after the decimal point.
+      labels:
+        ordered_steps: PASS
+        not_c_code: PASS
+        inputs_are_consumed: PASS
+        state_is_named: PASS
+        output_is_produced: PASS
+      borderline: []
+      note: Numbered plain-language plan, state named with initial values, output formatted.
+
+    - id: AD-2
+      role: isolates not_c_code (FAIL)
+      fields:
+        steps: |
+          1. scanf("%d", &n);
+          2. float total = 0.0;
+          3. for (int i = 0; i < n; i++) { scanf("%f", &score); total += score; }
+        state: |
+          int n, float total, float score
+        output_step: |
+          printf("%.2f", total / n);
+      labels:
+        ordered_steps: PASS
+        not_c_code: FAIL
+        inputs_are_consumed: PASS
+        state_is_named: PASS
+        output_is_produced: PASS
+      borderline: []
+      note: >
+        C statements with numbering bolted on - semicolons, a for-header,
+        scanf/printf, type declarations. The other criteria are satisfied.
+
+    - id: AD-3
+      role: isolates ordered_steps (FAIL) - unrecoverable order
+      fields:
+        steps: |
+          The program needs the count of students and each of their scores. It
+          keeps a running total that all the scores are added into, and it knows
+          how many students there are. Once everything has been read the total is
+          divided by the number of students. The scores are read one at a time
+          until there are none left. The total begins at zero.
+        state: |
+          a running total starting at zero, and the student count
+        output_step: |
+          The average is printed with two decimal places.
+      labels:
+        ordered_steps: FAIL
+        not_c_code: PASS
+        inputs_are_consumed: PASS
+        state_is_named: PASS
+        output_is_produced: PASS
+      borderline: []
+      note: >
+        One paragraph; the order cannot be recovered ("once everything has been
+        read" precedes "the scores are read one at a time"). Content is otherwise
+        complete - plain language, inputs read, state named, output formatted.
+
+    - id: AD-4
+      role: isolates inputs_are_consumed (FAIL) - data from nowhere
+      fields:
+        steps: |
+          1. Take the list of scores.
+          2. Set a running total to 0.
+          3. For each score in the list, add it to the running total.
+          4. Divide the running total by how many scores there were.
+        state: |
+          running total, starts at 0; the count of scores.
+        output_step: |
+          Print the running total divided by the count, to two decimal places.
+      labels:
+        ordered_steps: PASS
+        not_c_code: PASS
+        inputs_are_consumed: FAIL
+        state_is_named: PASS
+        output_is_produced: PASS
+      borderline: []
+      note: >
+        "Take the list of scores" - n is never read and the n-score input is
+        treated as a single pre-existing list. Steps are ordered, plain, state
+        named, output formatted.
+
+    - id: AD-5
+      role: isolates state_is_named (FAIL) - value never introduced
+      fields:
+        steps: |
+          1. Read n, the number of students.
+          2. Repeat n times: read the next score and add it to the total.
+          3. Divide the total by n.
+        state: ""
+        output_step: |
+          Print the result of the division with two decimal places.
+      labels:
+        ordered_steps: PASS
+        not_c_code: PASS
+        inputs_are_consumed: PASS
+        state_is_named: FAIL
+        output_is_produced: PASS
+      borderline: []
+      note: >
+        "add it to the total" - the total is never introduced or initialised and
+        the state box is empty. Reading and output are fine.
+
+    - id: AD-6
+      role: isolates output_is_produced (FAIL) - computed, never emitted
+      fields:
+        steps: |
+          1. Read n, the number of students.
+          2. Set sum to 0 and count to 0.
+          3. Repeat n times: read a score, add it to sum, add 1 to count.
+          4. Compute the average as sum divided by count.
+        state: |
+          sum - total of scores so far, starts at 0.
+          count - how many scores read, starts at 0.
+          average - sum / count.
+        output_step: |
+          The average has been computed.
+      labels:
+        ordered_steps: PASS
+        not_c_code: PASS
+        inputs_are_consumed: PASS
+        state_is_named: PASS
+        output_is_produced: FAIL
+      borderline: []
+      note: >
+        The plan computes the answer but never says it is printed, and never
+        states the two-decimal format. Everything up to the last step is sound.
+
+    - id: AD-7
+      role: borderline (not_c_code) - pseudocode
+      fields:
+        steps: |
+          1. read n
+          2. total <- 0
+          3. loop i from 1 to n:
+               read score
+               total <- total + score
+          4. average <- total / n
+        state: |
+          total (<- 0), n, average
+        output_step: |
+          print average rounded to 2 decimal places
+      labels:
+        ordered_steps: PASS
+        not_c_code: PASS
+        inputs_are_consumed: PASS
+        state_is_named: PASS
+        output_is_produced: PASS
+      borderline: [not_c_code]
+      note: >
+        Assignment arrows and "loop i from 1 to n" - pseudocode, not C syntax
+        (no semicolons, no scanf/printf, no type declarations). Strict label:
+        PASS (a non-C reader could follow it). Reasonable judges disagree;
+        expect wobble.

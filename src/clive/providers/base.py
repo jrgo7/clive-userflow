@@ -44,6 +44,18 @@ class Provider(ABC):
     model_choices: list[str]
     #: Environment variable holding this provider's API key.
     api_key_env: str
+    #: Model-id prefixes this provider serves. `get_provider(model=...)` routes a
+    #: phase's `model.id` to the provider that claims it, so a phase pinning a
+    #: `claude-*` model reaches Anthropic even when CLIVE_PROVIDER names DeepSeek.
+    model_prefixes: tuple[str, ...] = ()
+
+    @classmethod
+    def owns_model(cls, model_id: str) -> bool:
+        """Whether `model_id` belongs to this provider's model space."""
+        m = (model_id or "").lower()
+        return m in {c.lower() for c in cls.model_choices} or bool(
+            cls.model_prefixes and m.startswith(cls.model_prefixes)
+        )
 
     def api_key(self) -> str | None:
         return os.environ.get(self.api_key_env) or None
