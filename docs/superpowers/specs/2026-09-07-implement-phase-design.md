@@ -5,17 +5,25 @@ Date: 2026-09-07
 
 ## Why
 
-CLive covers the first three steps of PCDIT — Problem, Cases, Design — because those are
-the steps where a judge reads prose. The README has said since the beginning that
-"Implement and Test stay with AnimoRank's autograder." This spec brings **Implement**
-into CLive.
+**This repository is a prototype.** It outlines and demonstrates CLive's user flow; it is
+not CLive itself, and nothing specified here ships to students as a product. What this
+work produces is evidence about a design — whether a compiler-gated fourth phase belongs
+in the flow at all, and what it should feel like — which is then something the real
+implementation in AnimoRank can be built from or argue with. Read every decision below as
+"what the demonstrator should do to answer that question", not as a production
+requirement.
+
+The flow currently covers the first three steps of PCDIT — Problem, Cases, Design —
+because those are the steps where a judge reads prose. The README has said since the
+beginning that "Implement and Test stay with AnimoRank's autograder." This spec prototypes
+**Implement** inside the demonstrator.
 
 The point is not to reimplement an autograder. It is that PCDIT's fourth step is the one
-where a student's plan meets a compiler, and CLive is the only place that holds the plan.
-A plain autograder can tell a student their output is wrong. CLive can tell them their
-output is wrong *in the place where their code stopped following the design they wrote in
-phase 3* — and it can do that because `prior_artifacts` already carries phases 1-3 into
-every later phase's prompt.
+where a student's plan meets a compiler, and this flow is the only place that holds the
+plan. A plain autograder can tell a student their output is wrong. This can tell them
+their output is wrong *in the place where their code stopped following the design they
+wrote in phase 3* — and it can do that because `prior_artifacts` already carries phases
+1-3 into every later phase's prompt. That claim is the thing the prototype exists to test.
 
 So the phase is gated by tests and advised by a judge, and the judge's whole subject is
 conformance between the code and the student's own earlier work.
@@ -25,7 +33,7 @@ conformance between the code and the student's own earlier work.
 | Decision | Choice | Why |
 |---|---|---|
 | What gates the phase | Tests gate, judge advises | An LLM must not hold a student back on code that demonstrably works. |
-| I/O contract | AnimoRank's `ProgramIOTestCase`: stdin to stdout, exact match | CLive's existing `public_test_cases` are already this shape. |
+| I/O contract | AnimoRank's `ProgramIOTestCase`: stdin to stdout, exact match | The corpus's existing `public_test_cases` are already this shape. |
 | Where code runs | Container first, local sandbox fallback | Served from one host to participants; the image also pins the toolchain. |
 | Hidden cases | New optional `hidden_test_cases:` | Additive — all nine existing problem files stay valid untouched. |
 | Authoring | Studio Problem tab plus Sandbox Session | Keeps the Studio's promise that it can author everything the engine reads. |
@@ -69,7 +77,7 @@ Four deliberate divergences:
    pids cap, a memory cap, and an output cap.
 
 4. **`FunctionOutputTestCase` is not ported.** It is a type-registry and code-generation
-   subsystem, and CLive has no problem that needs it: `crowley_path` asks for `solvePath()`
+   subsystem, and no problem in the corpus needs it: `crowley_path` asks for `solvePath()`
    but its cases are already plain input/output pairs. The function shape is scaffolded
    through `starter_code` instead. The executor interface takes a file *map*, not a single
    source string, so a generated `main.c` can be added later without reopening it.
@@ -399,7 +407,14 @@ own state above the results, not as a failure.
 - **No user model.** Serving several participants from one host with sessions in
   `localStorage` means no per-student rate limiting is possible above the global semaphore.
   A participant who reloads loses nothing, but two participants cannot be told apart. This is
-  a pre-existing property of CLive, surfaced rather than introduced by this work.
+  a pre-existing property of the demonstrator, surfaced rather than introduced by this work,
+  and it is not worth fixing here — a prototype that grows a user model stops being cheap to
+  change, which is the only advantage it has.
+
+- **Prototype rigour is deliberately uneven.** The sandbox and the hidden-case leak guard
+  get production-grade treatment because real participants run real code on one shared host
+  during the pilot, and both failures would be unrecoverable. Everything else is built to be
+  cheap to throw away. Where those two goals conflict, the sandbox and the leak guard win.
 
 ## Out of scope
 
