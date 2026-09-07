@@ -2477,7 +2477,7 @@ def describe_toolchain(executor: Executor) -> str:
 with `import subprocess` at the top, `"describe_toolchain"` added to `__all__`, and the
 `_probed` annotation widened to `dict[str, bool | str]`.
 
-- [ ] **Step 6: Report the executor in `boot`**
+- [ ] **Step 5: Report the executor in `boot`**
 
 Replace the `return` in `boot()`:
 
@@ -2676,7 +2676,7 @@ kill %1
 ```
 Expected: JSON with `"passed": true` and `"counts": {"passed": 3, ...}`.
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 13: Commit**
 
 ```bash
 git add src/clive/studio/ tests/test_student_implement.py tests/test_student.py
