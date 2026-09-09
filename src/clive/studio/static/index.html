@@ -1701,6 +1701,25 @@ function renderSession() {
     };
     form.append(el("div", { className: "row", style: "margin-top:12px" }, [runBtn]));
   }
+
+  // Honest labeling, not a functional change: this phase's real gate is the
+  // compiler (student.submit routes a `gate: tests` phase through _submit_tests,
+  // which grades before it ever judges). The Session's Submit button, above, always
+  // posts to /api/judge -- the same advisory-criteria-only path every phase uses --
+  // so on this phase it never compiles or runs the code at all, and an artifact
+  // that does not even compile is reported "passed" here regardless. Routing Submit
+  // itself through the compiler gate would mean deciding how Run's
+  // saved-problem-only rule and Submit's sandbox-scratch rule reconcile for one
+  // request -- a real design question, not a bounded fix -- so this is a label
+  // pointing at the paths that are already correct, not a rewrite of this one.
+  if (S.phase.gate === "tests") {
+    form.append(el("div", { className: "note warn", style: "margin-top:12px", textContent:
+      "Submit (above) does not enforce the compiler gate on this phase. It judges the "
+      + "advisory criteria only, against whatever is in the code box, whether or not it "
+      + "compiles -- so a broken submission can still show up here as \"passed\". Use Run "
+      + "for compiler-gated feedback in the sandbox, or rehearse this phase for real on "
+      + "the actual /student page, where submit does enforce the gate." }));
+  }
   out.append(form);
 
   if (st.testRun) out.append(renderSessionTestRun(st.testRun));
@@ -2135,7 +2154,21 @@ function simStep(ev) {
     ]);
     return step("is-nudge", [when("Told to fix one thing"), box]);
   }
+  if (ev.type === "gate_skipped") {
+    // Compiler-gated phase: Simulate wrote the artifact but deliberately did not
+    // judge it (see simulate.py) -- rendered as a note, not a pass or a fail.
+    return step("is-phase", [
+      when("Compiler-gated — not judged by Simulate"),
+      el("div", { className: "note warn", style: "margin-top:6px", textContent: ev.message }),
+    ]);
+  }
   if (ev.type === "phase_done") {
+    if (ev.skipped) {
+      return step("is-phase", [
+        when(`${ev.label} — not judged`),
+        el("h4", { textContent: `${ev.label} skipped (compiler-gated)` }),
+      ]);
+    }
     return step(ev.passed ? "is-pass" : "is-fail", [
       when(`${ev.label} — ${ev.attempts} attempt${ev.attempts > 1 ? "s" : ""}`),
       el("h4", { textContent: ev.passed ? `${ev.label} passed` : `${ev.label} not passed` }),
@@ -2154,8 +2187,11 @@ function simStep(ev) {
     ]);
     const rows = el("div", { className: "sim-tally" });
     for (const p of ev.phases) {
-      rows.append(el("span", { className: `sim-chip ${p.passed ? "met" : "block"}`,
-        textContent: `${p.label}: ${p.attempts} attempt${p.attempts > 1 ? "s" : ""}` }));
+      const cls = p.skipped ? "adv" : p.passed ? "met" : "block";
+      const text = p.skipped
+        ? `${p.label}: skipped (compiler-gated)`
+        : `${p.label}: ${p.attempts} attempt${p.attempts > 1 ? "s" : ""}`;
+      rows.append(el("span", { className: `sim-chip ${cls}`, textContent: text }));
     }
     box.append(rows);
     box.append(el("div", { className: "cost", textContent:
