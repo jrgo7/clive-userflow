@@ -34,8 +34,10 @@ class ContainerExecutor(LocalExecutor):
         return None
 
     @classmethod
-    def wrap_with(cls, argv: list[str], workdir: Path, limits: Limits) -> list[str]:
-        return [
+    def wrap_with(
+        cls, argv: list[str], workdir: Path, limits: Limits, is_compile: bool,
+    ) -> list[str]:
+        cmd = [
             cls.runtime, "run", "--rm",
             # Without this, podman leaves the container's stdin closed (EOF)
             # regardless of what the client writes to the pipe -- a program that
@@ -44,24 +46,47 @@ class ContainerExecutor(LocalExecutor):
             "--network", "none",
             "--read-only",
             "--tmpfs", "/tmp:size=64m",
-            "--memory", f"{limits.memory_mb}m",
-            "--pids-limit", str(limits.pids),
             "--cpus", "1",
             # Read-write: gcc writes `program` here and the run step executes it.
             # --read-only still covers the container's own root filesystem.
             "--volume", f"{workdir}:/work:rw",
             "--workdir", "/work",
-            # The container stops itself if the client is killed, so a timeout does
-            # not leave a container running after the request is gone.
-            "--timeout", str(limits.run_seconds + 5),
-            config.EXECUTOR_IMAGE,
-        ] + argv
+        ]
+        if is_compile:
+            # Never --memory or --pids-limit here: base.py's Limits.compile_seconds
+            # docstring states the rule this backend must keep too -- gcc "is never
+            # given memory_mb: the compiler routinely needs more than a student's
+            # program is allowed, and an RLIMIT_AS that killed gcc would surface as a
+            # compile error on correct code". LocalExecutor/BwrapExecutor keep this by
+            # passing preexec=None to the compile spawn; the container-flag
+            # equivalent is simply not passing --memory/--pids-limit at all.
+            cmd += ["--timeout", str(limits.compile_seconds + 5)]
+        else:
+            cmd += [
+                "--memory", f"{limits.memory_mb}m",
+                "--pids-limit", str(limits.pids),
+                # The container stops itself if the client is killed, so a timeout
+                # does not leave a container running after the request is gone.
+                "--timeout", str(limits.run_seconds + 5),
+            ]
+        cmd.append(config.EXECUTOR_IMAGE)
+        return cmd + argv
 
     def execute(self, request):
         # `wrap` has no limits argument, so bind them for this call. The base class
-        # calls self.wrap(argv, workdir) for both the compile and the run.
+        # calls self.wrap(argv, workdir) for both the compile and the run, passing
+        # the literal request.compile_argv/request.run_argv objects through
+        # unchanged (local.py:275, local.py:294) -- so comparing by identity against
+        # the captured compile_argv reliably tells wrap_with which step it is
+        # building a command for.
         limits = request.limits
-        self.wrap = lambda argv, workdir: self.wrap_with(argv, workdir, limits)
+        compile_argv = request.compile_argv
+        # Safe only because get_executor() constructs a fresh instance per call --
+        # this mutates instance state, so reusing one instance across requests would
+        # let one request's limits leak into another's container invocation.
+        self.wrap = lambda argv, workdir: self.wrap_with(
+            argv, workdir, limits, is_compile=(argv is compile_argv)
+        )
         return super().execute(request)
 
     @classmethod

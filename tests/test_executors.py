@@ -190,3 +190,70 @@ def test_isolated_backends_have_no_network(executor):
     result = executor.run(request_for(NETWORK, [""], run_seconds=8))
     assert result.compiled, result.compile_error
     assert result.runs[0].stdout.strip() in ("blocked", "nosocket")
+
+
+def test_container_compile_step_gets_no_memory_or_pids_cap():
+    """base.py's Limits.compile_seconds docstring: gcc "is never given memory_mb: the
+    compiler routinely needs more than a student's program is allowed, and an
+    RLIMIT_AS that killed gcc would surface as a compile error on correct code."
+    LocalExecutor/BwrapExecutor keep this promise by passing preexec=None to the
+    compile-step spawn; the container backend's equivalent is to never pass
+    --memory/--pids-limit to the compile-step container at all, and to derive its
+    --timeout from compile_seconds rather than run_seconds. This is a pure argv
+    inspection -- it needs no podman/docker install and runs unconditionally.
+    """
+    from pathlib import Path
+
+    from clive.executors.container import ContainerExecutor
+
+    ContainerExecutor.runtime = "podman"
+    limits = Limits(compile_seconds=37, run_seconds=5)
+    workdir = Path("/tmp/does-not-need-to-exist")
+
+    compile_cmd = ContainerExecutor.wrap_with(
+        ["gcc", "-o", "program", "main.c"], workdir, limits, is_compile=True,
+    )
+    assert "--memory" not in compile_cmd
+    assert "--pids-limit" not in compile_cmd
+    assert compile_cmd[compile_cmd.index("--timeout") + 1] == str(limits.compile_seconds + 5)
+
+    run_cmd = ContainerExecutor.wrap_with(
+        ["./program"], workdir, limits, is_compile=False,
+    )
+    assert "--memory" in run_cmd
+    assert "--pids-limit" in run_cmd
+    assert run_cmd[run_cmd.index("--timeout") + 1] == str(limits.run_seconds + 5)
+
+
+def test_container_compile_timeout_is_not_cut_short_by_run_seconds():
+    """Regression, behavioral: before the fix, --timeout for BOTH steps derived from
+    run_seconds, so a compile that legitimately takes longer than run_seconds+5 (but
+    well within compile_seconds+5) would have been killed by the container's own
+    --timeout regardless -- misreporting a still-within-budget compile as failed.
+
+    A real gcc compile is too fast to distinguish the two timeouts reliably, so this
+    runs `wrap_with`'s own compile-shaped argv directly with `sleep` standing in for
+    a slow compile: with run_seconds tiny (timeout would be ~6s if the bug were still
+    present) and compile_seconds generous (timeout ~35s), a process that takes 10s
+    must survive -- proving the container timeout actually came from
+    compile_seconds, not run_seconds.
+    """
+    if "container" not in [e.name for e in EXECUTORS]:
+        pytest.skip("container backend not available on this host")
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    from clive.executors.container import ContainerExecutor
+
+    limits = Limits(compile_seconds=30, run_seconds=1)
+    with tempfile.TemporaryDirectory(prefix="clive-test-") as tmp:
+        cmd = ContainerExecutor.wrap_with(
+            ["sleep", "10"], Path(tmp), limits, is_compile=True,
+        )
+        # Wall-clock timeout here is just headroom for the assertion itself, well
+        # above the 10s sleep and the container's own ~35s --timeout ceiling would
+        # never be reached anyway; it exists only so a genuinely broken invocation
+        # cannot hang the test suite.
+        done = subprocess.run(cmd, capture_output=True, timeout=20)
+    assert done.returncode == 0, done.stderr.decode(errors="replace")
