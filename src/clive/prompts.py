@@ -648,6 +648,23 @@ def jinja_env() -> jinja2.Environment:
     return env
 
 
+def _problem_for_template(problem: dict) -> dict:
+    """`problem`, with `hidden_test_cases` stripped, for anything Jinja will render.
+
+    Every other link in the hidden-case leak guard strips or omits the data before
+    its boundary -- `grade.py` never includes a hidden case's input/output past a
+    pass/fail, `student.problem()` builds its dict key by key rather than by
+    copying the loaded YAML, `nudge_code()` selects only public failures before a
+    template ever sees them. Template rendering was the one link that instead
+    relied on "no template happens to reference `hidden_test_cases`" -- true today
+    (nothing in prompts/phases/*.yaml or prompts/base/nudge_code.yaml does), but a
+    far weaker guarantee than the data simply not being there, especially in a repo
+    whose own Studio lets an author edit these very templates. Copied rather than
+    mutated in place: `problem` may be the caller's own loaded dict.
+    """
+    return {k: v for k, v in problem.items() if k != "hidden_test_cases"}
+
+
 def render_user_prompt(
     phase: dict,
     problem: dict,
@@ -667,7 +684,7 @@ def render_user_prompt(
     """
     template = jinja_env().from_string(phase["user_template"])
     return template.render(
-        problem=problem,
+        problem=_problem_for_template(problem),
         artifact=artifact or {},
         artifact_fields=phase.get("artifact_fields") or [],
         criteria_to_judge=criteria,
@@ -793,7 +810,7 @@ def render_nudge_code_prompt(
     template = jinja_env().from_string(doc["user_template"])
     return template.render(
         phase=phase,
-        problem=problem,
+        problem=_problem_for_template(problem),
         code=code or "",
         failures=failures,
         compile_error=compile_error or "",
