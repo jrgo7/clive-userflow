@@ -20,6 +20,17 @@ uv run clive-studio       # opens http://127.0.0.1:8765
 an API key; only the Run tab needs one. The same server also serves the student view at
 `http://127.0.0.1:8765/student` — **Student view** in the header opens it.
 
+> **Deployment warning: the Studio API has no authentication.** Every route under
+> `/api/`, including `GET /api/problem/<slug>` (which returns a problem's
+> `hidden_test_cases` in full) and every criteria/prompt file the Studio can edit, is
+> served to whoever can reach the port — there is no login, no token, nothing. It
+> defaults to loopback-only (`127.0.0.1`), which is safe on your own machine, but if
+> you bind it to a real interface or put it behind a tunnel or a reverse proxy without
+> adding your own auth layer (a proxy that requires a login, a firewall rule, an SSH
+> tunnel — anything), anyone who can reach the port can read the rubric and every
+> hidden test case for every problem. Do not expose this server to an untrusted
+> network as-is.
+
 **Provider.** The judge call goes to Anthropic by default. Set `CLIVE_PROVIDER=deepseek`
 in `.env` (with `DEEPSEEK_API_KEY`) to send it to DeepSeek instead — the model dropdown and
 the key pill follow the choice. DeepSeek has no `effort` or thinking knob; pick
@@ -172,7 +183,27 @@ wrap the command. `get_executor()` probes and takes the strongest that works —
 `CLIVE_SANDBOX_FLOOR` refuses anything weaker than you specify. Set it to `namespace` or
 better on a host serving more than one person. `bwrap`'s probe runs bubblewrap rather than
 testing for the binary, because it can be installed and still fail where unprivileged user
-namespaces are restricted.
+namespaces are restricted — and the container backend's probe actually runs a container
+the same way, for the same reason: it is what caught a Critical bug where podman's CLI
+accepts `--timeout` on `run` and docker's does not, which meant every compile failed on a
+docker-only host despite the image being present and correct.
+
+**Known gap: disk usage on the container backend is a post-hoc check, not a hard cap.**
+`local`/`local-bwrap` bound how much a student's program can write with `RLIMIT_FSIZE`,
+applied straight to the process — the write itself fails once it is exceeded. The
+container backend has no equivalent: a Python rlimit would cap the podman/docker client,
+not the containerized program, and `--tmpfs /tmp:size=64m` only bounds `/tmp` — the actual
+working directory (`/work`) is an uncapped bind mount. `Limits.workdir_bytes` is a
+best-effort mitigation, not a fix: after each run, `LocalExecutor.execute` sums the work
+directory's total size and reports the run as `disk_exceeded` rather than `ok` when it is
+over the cap. That stops a flood from being misreported as a successful run, but it does
+**not** stop the bytes from landing on host disk in the first place — a write fast enough
+to finish within the run's own time budget can still land more data on host disk than the
+cap before this check ever runs. `local`/`local-bwrap`'s `RLIMIT_FSIZE` remains the harder
+guarantee. A true byte cap for the container backend would need either a size-capped
+tmpfs seeded through a different file-injection mechanism than today's one-shot `podman
+run` with a pre-populated bind mount, or `--storage-opt` quotas, which are not portably
+available across storage drivers — both are redesigns, not fixes, and out of scope here.
 
 **Contract, and where it differs from AnimoRank.** The compile and run lines are
 AnimoRank's verbatim (`gcc -Werror -Wall -o program main.c -lm -lpthread`, then
