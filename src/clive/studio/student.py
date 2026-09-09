@@ -10,6 +10,13 @@ here in the server rather than as restraint in the page:
   it, in `submit`. Shipping the whole rubric and hiding it in the page would put the
   checklist one devtools panel away from the student it is meant to make think.
 
+  A problem's hidden test cases are the same rule applied to a compiler instead of a
+  judge. `problem` never adds them -- its dict is built key by key rather than by
+  copying the loaded YAML, so there is no wholesale copy for a future field to leak
+  through -- and `run` fixes its scope to `"public"` in code, not from the request, so
+  no request can turn the Run button into a way to read the hidden suite back one
+  probe at a time.
+
   Prompts, model ids and token counts are stripped. They are the author's concern and
   they invite the student to argue with the judge rather than with the problem.
 
@@ -25,13 +32,15 @@ author's experiments and not to a student's transcript.
 
 from __future__ import annotations
 
+from clive import grade as grading
 from clive import hint as hinting
 from clive import judge as judging
 from clive import nudge as nudging
 from clive import prompts
+from clive.executors import ExecutorError, describe_toolchain, get_executor
 from clive.providers import get_provider
 
-__all__ = ["boot", "problem", "submit", "hint"]
+__all__ = ["boot", "problem", "submit", "run", "hint"]
 
 
 def boot() -> dict:
@@ -54,25 +63,61 @@ def boot() -> dict:
                 "artifact_fields": doc.get("artifact_fields") or [],
             }
         )
+    # The page disables Run honestly rather than failing on click, and a verdict can be
+    # traced back to the toolchain that produced it.
+    try:
+        executor = get_executor()
+        executor_info = {
+            "available": True,
+            "name": executor.name,
+            "isolation": executor.isolation,
+            "toolchain": describe_toolchain(executor),
+            "error": "",
+        }
+    except ExecutorError as exc:
+        executor_info = {
+            "available": False, "name": "", "isolation": "", "toolchain": "", "error": str(exc)
+        }
+
     return {
         "phases": phases,
         "problems": prompts.list_problems(),
         "has_api_key": provider.has_api_key(),
+        "executor": executor_info,
     }
 
 
 def problem(slug: str) -> dict:
-    """One problem as the student reads it: the statement and the examples they were
-    given. Everything else in the file is authoring metadata."""
+    """One problem as the student reads it: the statement, the examples they were
+    given, and the starter code to begin from. Everything else in the file -- the
+    hidden test cases above all -- is authoring metadata.
+
+    The dict below is built key by key rather than by copying `doc`, which is what
+    makes the omission structural: a field added to the problem schema tomorrow does
+    not reach a student until someone deliberately adds a line here.
+    """
     doc = prompts.load_problem(slug)
     return {
         "problem": {
             "slug": doc.get("slug", slug),
             "title": doc.get("title", slug),
             "statement": doc.get("statement", ""),
+            "starter_code": doc.get("starter_code", ""),
             "public_test_cases": doc.get("public_test_cases") or [],
         }
     }
+
+
+def run(body: dict) -> dict:
+    """Compile and check against the public cases only. No judge, no nudge, no attempt.
+
+    The Run button. It is deliberately not a submission: a student should be able to
+    press it as often as they like, and nothing about it is recorded or costs a model
+    call. `scope="public"` is fixed here rather than taken from the body, so no request
+    can ask this endpoint to run the hidden cases and read back the count.
+    """
+    prob = prompts.load_problem(body["problem_id"])
+    return grading.grade(prob, body.get("code") or "", scope="public")
 
 
 def _context(body: dict) -> tuple[dict, dict, list[dict]]:
@@ -92,6 +137,11 @@ def submit(body: dict) -> dict:
     the judge failing to rule on a criterion is a broken contract, not a met one.
     """
     phase, prob, criteria = _context(body)
+
+    # Every other gate, named or absent, falls through to the judged path below unchanged.
+    if phase.get("gate") == "tests":
+        return _submit_tests(phase, prob, criteria, body)
+
     artifact = body.get("artifact") or {}
     attempt = int(body.get("attempt", 1))
     prior = body.get("prior_artifacts") or []
@@ -156,6 +206,74 @@ def submit(body: dict) -> dict:
         except nudging.JudgeError as exc:
             out["nudge_error"] = str(exc)
 
+    return out
+
+
+def _submit_tests(phase: dict, prob: dict, criteria: list[dict], body: dict) -> dict:
+    """A tests-gated submission: graded first, judged only if it already works.
+
+    The judge is not called on failing code, for two reasons. It spends a call to
+    review something the student is about to change anyway; and skipping it means the
+    advisory review always reads a working program, so it can be written to comment on
+    conformance rather than on correctness.
+
+    `blocking` stays empty because a failing test is not a criterion. Nothing downstream
+    should mistake a wrong answer for a rubric failure.
+    """
+    artifact = body.get("artifact") or {}
+    code = body.get("code") or artifact.get("code") or ""
+    attempt = int(body.get("attempt", 1))
+    prior = body.get("prior_artifacts") or []
+
+    try:
+        test_run = grading.grade(prob, code, scope="all")
+    except ExecutorError as exc:
+        raise judging.JudgeError(str(exc)) from None
+
+    out = {
+        "test_run": test_run,
+        "verdicts": [],
+        "blocking": [],
+        "advisory_unmet": [],
+        "missing_ids": [],
+        "passed": False,
+        "nudge": None,
+        "nudge_error": None,
+    }
+
+    if not test_run["passed"]:
+        try:
+            out["nudge"] = nudging.nudge_code(phase, prob, code, test_run, attempt, prior)
+        except nudging.JudgeError as exc:
+            # Losing the nudge must not cost the student the results they waited for.
+            out["nudge_error"] = str(exc)
+        return out
+
+    out["passed"] = True
+
+    # Advisory review, on code already known to work. A failure here is reported and
+    # never bars: `passed` is already true and stays true.
+    try:
+        result = judging.judge(phase, prob, artifact or {"code": code}, criteria, attempt, prior)
+    except judging.JudgeError as exc:
+        out["nudge_error"] = str(exc)
+        return out
+
+    by_id = {c["id"]: c for c in criteria}
+    for v in result["verdicts"]:
+        c = by_id.get(v["criterion_id"], {})
+        out["verdicts"].append(
+            {
+                "criterion_id": v["criterion_id"],
+                "criterion_text": c.get("text", ""),
+                "gate": c.get("gate", prompts.DEFAULT_GATE),
+                "verdict": v["verdict"],
+                "evidence": v.get("evidence", ""),
+                "evidence_found": v.get("evidence_found", True),
+            }
+        )
+    out["advisory_unmet"] = [v["criterion_id"] for v in out["verdicts"] if v["verdict"] == "FAIL"]
+    out["missing_ids"] = result["missing_ids"]
     return out
 
 

@@ -20,6 +20,7 @@ from clive import nudge as nudging
 from clive import prompts
 from clive import simulate as simulating
 from clive.config import EFFORT_CHOICES
+from clive.executors import ExecutorError
 from clive.providers import get_provider
 from clive.studio import student as studenting
 
@@ -111,6 +112,9 @@ def route(method: str, path: str, body: dict) -> dict:
 
     if parts == ["api", "student", "submit"] and method == "POST":
         return run_student_submit(body)
+
+    if parts == ["api", "student", "run"] and method == "POST":
+        return run_student_code(body)
 
     if parts == ["api", "student", "hint"] and method == "POST":
         return run_student_hint(body)
@@ -319,12 +323,22 @@ def run_student_submit(body: dict) -> dict:
     """A student submission: judged, then nudged in the same call if a gate failed.
 
     `student.submit` handles a failed nudge itself and still returns the verdicts, so
-    the only thing that reaches here is the judge call giving up entirely — which is
-    the one case where there is nothing to show.
+    the only thing that reaches here is the judge call giving up entirely — or, for a
+    tests-gated phase, the executor itself failing before there was anything to grade —
+    which are the cases where there is nothing to show.
     """
     try:
         return studenting.submit(body)
     except judging.JudgeError as exc:
+        raise ApiError(str(exc), 502) from None
+
+
+def run_student_code(body: dict) -> dict:
+    """The Run button. An executor failure is the server's problem, not the student's,
+    so it comes back as a 502 rather than as a wrong answer."""
+    try:
+        return studenting.run(body)
+    except ExecutorError as exc:
         raise ApiError(str(exc), 502) from None
 
 

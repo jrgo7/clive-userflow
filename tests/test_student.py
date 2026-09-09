@@ -108,7 +108,7 @@ def test_boot_carries_what_the_student_is_asked_to_do():
 
 def test_problem_exposes_only_student_facing_keys():
     prob = student.problem("grade_average")["problem"]
-    assert set(prob) == {"slug", "title", "statement", "public_test_cases"}
+    assert set(prob) == {"slug", "title", "statement", "starter_code", "public_test_cases"}
 
 
 # ------------------------------------------------------------------------ submit
@@ -194,3 +194,19 @@ def test_served_page_ships_no_rubric():
     for c in all_criteria():
         assert c["id"] not in page, f"{c['id']} appears in student.html"
         assert c["text"] not in page
+
+
+def test_no_hidden_test_case_reaches_the_served_page():
+    """The same class of rule as the rubric guard: a hidden case is content the
+    student must not have, and the served HTML is one view-source away from them."""
+    hidden = [
+        c
+        for meta in prompts.list_problems()
+        for c in prompts.load_problem(meta["slug"])["hidden_test_cases"]
+    ]
+    if not hidden:
+        pytest.skip("no hidden cases authored yet")
+    html = (STATIC / "student.html").read_text(encoding="utf-8")
+    for case in hidden:
+        assert case["input"] not in html
+        assert str(case["output"]) not in html

@@ -9,6 +9,8 @@ CLIVE_SANDBOX_FLOOR.
 
 from __future__ import annotations
 
+import subprocess
+
 from clive import config
 from clive.executors.base import (
     ExecutionRequest,
@@ -24,6 +26,7 @@ from clive.executors.local import BwrapExecutor, LocalExecutor
 __all__ = [
     "ExecutorError", "Executor", "ExecutionRequest", "ExecutionResult",
     "Limits", "RunOutcome", "REGISTRY", "get_executor", "available_executors",
+    "describe_toolchain",
 ]
 
 #: Strongest first. `get_executor` takes the first one that probes clean.
@@ -32,7 +35,7 @@ REGISTRY: list[type[Executor]] = [ContainerExecutor, BwrapExecutor, LocalExecuto
 #: Higher is stronger. CLIVE_SANDBOX_FLOOR names the weakest acceptable value.
 ISOLATION_RANK = {"rlimit": 0, "namespace": 1, "container": 2}
 
-_probed: dict[str, bool] = {}
+_probed: dict[str, bool | str] = {}
 
 
 def _probe(cls: type[Executor]) -> bool:
@@ -82,3 +85,21 @@ def get_executor() -> Executor:
         f"{candidates[0].isolation!r} isolation, below CLIVE_SANDBOX_FLOOR="
         f"{config.SANDBOX_FLOOR!r}. Install podman or docker, or lower the floor."
     )
+
+
+def describe_toolchain(executor: Executor) -> str:
+    """What compiled the code, in one line.
+
+    The container backend answers with its image, which is the whole reason it is the
+    default: the image is the toolchain. Everything else has to ask the host's gcc, and
+    the answer is cached because it cannot change while the process runs.
+    """
+    if executor.isolation == "container":
+        return config.EXECUTOR_IMAGE
+    if "gcc" not in _probed:
+        try:
+            done = subprocess.run(["gcc", "--version"], capture_output=True, text=True, timeout=10)
+            _probed["gcc"] = done.stdout.splitlines()[0] if done.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError, IndexError):
+            _probed["gcc"] = ""
+    return _probed["gcc"] or "unknown"
