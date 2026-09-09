@@ -636,7 +636,7 @@ function renderStage() {
       text: `Your work was checked, but we could not put together a next step: ${r.nudge_error}` }));
   }
   if (st.hint) out.push(renderHint(st.hint));
-  if (r) out.push(renderLedger(r));
+  if (r && (r.verdicts.length || r.missing_ids.length)) out.push(renderLedger(r));
 
   if (st.passed && S.i === S.boot.phases.length - 1) {
     out.push(h("div", { class: "card done" }, [

@@ -25,21 +25,37 @@
     return /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback;
   }
 
-  function defineThemes(monaco) {
-    for (const [name, base, surface, ink] of [
-      ["clive-light", "vs", hex("--surface", "#ffffff"), hex("--ink", "#14201f")],
-      ["clive-dark", "vs-dark", hex("--surface", "#161d1c"), hex("--ink", "#e6ece9")],
-    ]) {
-      monaco.editor.defineTheme(name, {
-        base, inherit: true, rules: [],
-        colors: {
-          "editor.background": surface,
-          "editor.foreground": ink,
-          "editorLineNumber.foreground": hex("--ink-3", "#8b9997"),
-          "editorGutter.background": surface,
-        },
-      });
-    }
+  /* `--surface`/`--ink`/`--ink-3` are the same variable names in both the light and
+     dark halves of the page's stylesheet, so a `getComputedStyle` read only ever
+     returns whichever palette is live in the DOM right now -- it cannot answer "what
+     is the dark value" while the page is light. Reading them once for both theme
+     names (as a loop over both names sharing one read used to do) would bake
+     whichever palette happens to be active into BOTH Monaco themes, leaving the
+     other one silently wrong until something redefines it. So this is never called
+     once up front for both names: every call site that is about to *apply* a theme
+     calls this for that one name immediately first, which is the only way to
+     guarantee the read happens while the DOM is actually in that theme's state. */
+  const THEME_FALLBACK = {
+    "clive-light": { base: "vs", surface: "#ffffff", ink: "#14201f", ink3: "#8b9997" },
+    "clive-dark": { base: "vs-dark", surface: "#161d1c", ink: "#e6ece9", ink3: "#6f807c" },
+  };
+
+  function defineTheme(monaco, name) {
+    const fb = THEME_FALLBACK[name];
+    const surface = hex("--surface", fb.surface);
+    monaco.editor.defineTheme(name, {
+      base: fb.base, inherit: true, rules: [],
+      colors: {
+        "editor.background": surface,
+        "editor.foreground": hex("--ink", fb.ink),
+        "editorLineNumber.foreground": hex("--ink-3", fb.ink3),
+        "editorGutter.background": surface,
+      },
+    });
+  }
+
+  function currentThemeName() {
+    return isDark() ? "clive-dark" : "clive-light";
   }
 
   function isDark() {
@@ -57,7 +73,6 @@
       tag.onload = () => {
         global.require.config({ paths: { vs: `${CDN}/vs` } });
         global.require(["vs/editor/editor.main"], () => {
-          defineThemes(global.monaco);
           resolve(global.monaco);
         }, reject);
       };
@@ -95,11 +110,15 @@
       const carried = live.getValue();
       host.replaceChildren();
       host.style.minHeight = "320px";
+      // Defined immediately before it is applied, so the read below always reflects
+      // whatever the DOM's palette actually is at this instant -- see defineTheme.
+      const initialTheme = currentThemeName();
+      defineTheme(monaco, initialTheme);
       const editor = monaco.editor.create(host, {
         value: carried,
         language: opts.language || "c",
         readOnly: !!opts.readOnly,
-        theme: isDark() ? "clive-dark" : "clive-light",
+        theme: initialTheme,
         automaticLayout: true,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
@@ -110,7 +129,9 @@
       });
       editor.onDidChangeModelContent(() => opts.onChange && opts.onChange(editor.getValue()));
       matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-        monaco.editor.setTheme(isDark() ? "clive-dark" : "clive-light");
+        const name = currentThemeName();
+        defineTheme(monaco, name);
+        monaco.editor.setTheme(name);
       });
       live = {
         getValue: () => editor.getValue(),
