@@ -59,6 +59,7 @@ header {
   background: var(--panel-2); color: var(--ink-2); border: 1px solid var(--line);
 }
 .pill.bad { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+.pill.ok { background: var(--pass-bg); color: var(--pass); border-color: transparent; }
 a.mini { text-decoration: none; display: inline-flex; align-items: center; }
 
 /* ---- simulate ------------------------------------------------------------ */
@@ -144,6 +145,7 @@ input, select, textarea {
 }
 textarea { resize: vertical; min-height: 60px; }
 textarea.mono, input.mono, pre { font-family: var(--mono); font-size: 12.5px; }
+pre.mono { white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 button.act {
@@ -575,15 +577,45 @@ async function seedSandbox() {
   for (const pr of S.boot.problems) {
     box.problems[pr.slug] = (await api("GET", `/api/problem/${pr.slug}`)).problem;
   }
+  // freshSession reads its phase and problem definitions out of S.sandbox (see below),
+  // so that has to already point at this box before it runs -- not just receive it as
+  // this function's return value -- or the very first session ever seeded would find
+  // no phases and build every artifact empty.
+  S.sandbox = box;
   box.session = freshSession(S.problemSlug || S.boot.problems[0].slug);
   return box;
 }
 
-/** A new run through the phases: only the first is unlocked. */
+/** A new run through the phases: only the first is unlocked.
+ *
+ * Reads phase and problem definitions from S.sandbox rather than S.boot.phases /
+ * S.problem. S.boot.phases only ever carries {phase, label, order, version} in the
+ * Studio -- unlike the student page's boot, which inlines artifact_fields -- so it
+ * cannot answer what a phase's fields are. And S.problem can still be the problem
+ * being switched *away from* when this runs from the Session's problem picker below,
+ * which calls this before it calls loadProblem. Keying off
+ * S.sandbox.phases[p.phase] / S.sandbox.problems[problemSlug] instead means every
+ * caller -- the initial seed, "Restart session", and the problem picker -- reads the
+ * definitions for the session actually being built, not whatever happened to be on
+ * screen a moment ago.
+ */
 function freshSession(problemSlug) {
+  // The one editor cache that spans every phase of a session: a restart or a
+  // different problem invalidates all of it at once, and this is the one function
+  // every such change already runs through.
+  sessionEditorHosts.clear();
+  const problem = S.sandbox.problems[problemSlug];
   const phases = {};
   S.boot.phases.forEach((p, i) => {
-    phases[p.phase] = { attempt: 1, passed: false, unlocked: i === 0, artifact: {}, transcript: [] };
+    const doc = S.sandbox.phases[p.phase] || {};
+    phases[p.phase] = {
+      attempt: 1, passed: false, unlocked: i === 0,
+      artifact: Object.fromEntries((doc.artifact_fields || []).map((f) => [
+        f.id,
+        f.kind === "code" ? (problem && problem.starter_code) || "" : "",
+      ])),
+      transcript: [],
+    };
   });
   return { problem: problemSlug, phases };
 }
@@ -1507,6 +1539,30 @@ function rubricRow(group, criterion, st) {
 const phaseIndex = (id) => S.boot.phases.findIndex((p) => p.phase === id);
 const nextPhase = () => S.boot.phases[phaseIndex(S.phaseId) + 1] || null;
 
+/* One Monaco per session phase and field, reused across renders -- same reason as
+   the student page's editorHost and the Problem tab's starterCodeHost: renderSession()
+   rebuilds the whole form on every state change (an edit, a submit, a dismissed
+   hint...), and a fresh CLiveEditor.mount on each of those would leak a Monaco
+   instance and reset the cursor every time a completely unrelated part of the form
+   changes. Keyed by phase + field id, since a session can carry a code field on more
+   than one phase. Cleared inside freshSession -- the one place a session actually
+   restarts or points at a different problem. */
+const sessionEditorHosts = new Map();
+
+function sessionEditorHost(f, st) {
+  const key = `${S.phaseId}:${f.id}`;
+  const cached = sessionEditorHosts.get(key);
+  if (cached) return cached;
+  const host = el("div", { className: "editor-host" });
+  sessionEditorHosts.set(key, host);
+  queueMicrotask(() => CLiveEditor.mount(host, {
+    value: st.artifact[f.id] || "",
+    language: f.language || "c",
+    onChange: (v) => { st.artifact[f.id] = v; writeSandbox(); },
+  }));
+  return host;
+}
+
 function renderSession() {
   const out = el("div");
   const st = sess();
@@ -1616,14 +1672,38 @@ function renderSession() {
   const fields = S.phase.artifact_fields || [];
   if (!fields.length) form.append(el("p", { className: "empty", textContent: "This phase has no artifact fields." }));
   for (const f of fields) {
+    if (f.kind === "code") {
+      form.append(field(f.label || f.id, sessionEditorHost(f, st), f.hint));
+      continue;
+    }
     form.append(field(
       f.label || f.id,
       textArea(st.artifact[f.id] || "", (v) => { st.artifact[f.id] = v; writeSandbox(); }, f.rows || 4),
       f.hint,
     ));
   }
+
+  // Run grades the SAVED problem's cases, never the sandbox copy: test cases are not
+  // part of what the sandbox lets an author experiment with (that's rubrics and
+  // prompts), so there is no sandbox-scoped id to run this against in the first place.
+  if (fields.some((f) => f.kind === "code")) {
+    const runBtn = el("button", { className: "act ghost", textContent: "Run" });
+    runBtn.title = "Compiles and checks the public cases of the SAVED problem — "
+      + "test cases are not part of the sandbox.";
+    runBtn.onclick = async () => {
+      try {
+        st.testRun = await api("POST", "/api/student/run", {
+          problem_id: S.problemSlug, code: st.artifact.code || "",
+        });
+        writeSandbox();
+        render();
+      } catch (e) { say(e.message, "err"); }
+    };
+    form.append(el("div", { className: "row", style: "margin-top:12px" }, [runBtn]));
+  }
   out.append(form);
 
+  if (st.testRun) out.append(renderSessionTestRun(st.testRun));
   if (st.hint) out.append(renderHint(st.hint));
   if (st.nudge) out.append(renderNudge(st.nudge));
   else if (S.nudging) {
@@ -1704,6 +1784,35 @@ function renderNudge(n) {
   const dismiss = el("button", { className: "mini", textContent: "Dismiss" });
   dismiss.onclick = () => { sess().nudge = null; writeSandbox(); render(); };
   card.append(el("div", { style: "margin-top:10px" }, [dismiss]));
+  return card;
+}
+
+/** Compact results for the Session's Run button. Same shape as Task 11's test-run
+ *  panel on the student page, against the same /api/student/run response. */
+function renderSessionTestRun(tr) {
+  const card = el("div", { className: "card" }, [
+    el("h3", { textContent: tr.compiled
+      ? `Test cases — ${tr.counts.passed} of ${tr.counts.total} passing`
+      : "It did not compile" }),
+  ]);
+  if (!tr.compiled) {
+    card.append(el("pre", { className: "mono", textContent: tr.compile_error.trim() }));
+    return card;
+  }
+  if (tr.warnings && tr.warnings.trim()) {
+    card.append(el("div", { className: "note warn", textContent: tr.warnings.trim() }));
+  }
+  for (const c of tr.cases) {
+    card.append(el("div", { className: "item" }, [
+      el("div", { className: "head" }, [
+        el("span", { className: c.passed ? "pill ok" : "pill bad",
+                     textContent: c.passed ? "PASS" : "FAIL" }),
+        el("span", { textContent: c.hidden ? "hidden case"
+          : `input ${JSON.stringify(c.input)} → ${JSON.stringify(c.actual)} `
+            + `(expected ${JSON.stringify(c.expected)})` }),
+      ]),
+    ]));
+  }
   return card;
 }
 
