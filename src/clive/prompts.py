@@ -346,6 +346,32 @@ def load_nudge() -> dict:
     return data
 
 
+def nudge_code_path() -> Path:
+    return BASE_PROMPTS_DIR / "nudge_code.yaml"
+
+
+def load_nudge_code() -> dict:
+    """The nudge for a tests-gated phase.
+
+    Separate from `load_nudge` because the two prompts take different inputs: that one
+    is handed failing criteria, this one is handed failing test cases and a compiler.
+    """
+    path = nudge_code_path()
+    if not path.exists():
+        raise ContentError(
+            "The code nudge prompt is missing. Expected prompts/base/nudge_code.yaml."
+        )
+    data = read_yaml(path)
+    for key in ("system_prompt", "user_template"):
+        if not str(data.get(key, "")).strip():
+            raise ContentError(f"prompts/base/nudge_code.yaml has no {key}.")
+    model = data.setdefault("model", {})
+    model.setdefault("id", get_provider().default_model)
+    model.setdefault("effort", "medium")
+    model.setdefault("max_output_tokens", 2000)
+    return data
+
+
 # ---------------------------------------------------------------------- personas
 
 
@@ -744,6 +770,36 @@ def render_nudge_prompt(
         attempt=attempt,
         prior_artifacts=prior_artifacts or [],
         history=history or [],
+    )
+
+
+def render_nudge_code_prompt(
+    doc: dict,
+    phase: dict,
+    problem: dict,
+    code: str,
+    failures: list[dict],
+    compile_error: str = "",
+    hidden_failed: int = 0,
+    attempt: int = 1,
+    prior_artifacts: list[dict] | None = None,
+) -> str:
+    """Render the code-nudge template.
+
+    `failures` carries only public cases -- the caller selects them, and
+    `tests/test_nudge_code.py` asserts a hidden input never reaches the rendered
+    string. `hidden_failed` is a count and must stay a count.
+    """
+    template = jinja_env().from_string(doc["user_template"])
+    return template.render(
+        phase=phase,
+        problem=problem,
+        code=code or "",
+        failures=failures,
+        compile_error=compile_error or "",
+        hidden_failed=hidden_failed,
+        attempt=attempt,
+        prior_artifacts=prior_artifacts or [],
     )
 
 

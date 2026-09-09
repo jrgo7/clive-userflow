@@ -29,7 +29,7 @@ from clive import prompts
 from clive.providers import get_provider
 from clive.providers.base import JudgeError
 
-__all__ = ["Nudge", "JudgeError", "nudge"]
+__all__ = ["Nudge", "JudgeError", "nudge", "nudge_code"]
 
 
 class Nudge(BaseModel):
@@ -130,4 +130,97 @@ def nudge(
             "input_tokens": result.input_tokens,
             "output_tokens": result.output_tokens,
         },
+    }
+
+
+def nudge_code(
+    phase: dict,
+    problem: dict,
+    code: str,
+    test_run: dict,
+    attempt: int = 1,
+    prior_artifacts: list[dict] | None = None,
+) -> dict:
+    """Ask for one nudge about one submission whose tests did not pass.
+
+    The counterpart to `nudge()` for a tests-gated phase. That one selects failing
+    gating criteria; this one selects failing test cases -- and, exactly as there, the
+    selection happens here rather than in the caller, so no caller can hand the model a
+    hidden case's input. The model is told how many hidden cases failed and nothing more.
+
+    `failing` is returned computed rather than taken from the reply, for the reason
+    `nudge()` gives: a summary that forgets a failure must not be able to hide it.
+    """
+    compile_error = "" if test_run.get("compiled", True) else test_run.get("compile_error", "")
+
+    public_failures = [
+        {
+            "id": str(i),
+            "input": c.get("input", ""),
+            "expected": c.get("expected", ""),
+            "actual": c.get("actual", ""),
+            "status": c.get("status", "ok"),
+        }
+        for i, c in enumerate(test_run.get("cases") or [])
+        if not c.get("hidden") and not c.get("passed")
+    ]
+    hidden_failed = sum(
+        1 for c in test_run.get("cases") or [] if c.get("hidden") and not c.get("passed")
+    )
+
+    if not compile_error and not public_failures and not hidden_failed:
+        raise JudgeError(
+            "Nothing failed in this submission, so there is nothing to nudge about."
+        )
+
+    failing = []
+    if compile_error:
+        failing.append({"id": "compile", "text": "The program did not compile."})
+    for f in public_failures:
+        failing.append(
+            {
+                "id": f["id"],
+                "text": f"Input {f['input']!r} printed {f['actual']!r}, expected {f['expected']!r}.",
+            }
+        )
+    if hidden_failed:
+        failing.append(
+            {
+                "id": "hidden",
+                "text": f"{hidden_failed} case{'s' if hidden_failed > 1 else ''} "
+                        "you have not seen also failed.",
+            }
+        )
+
+    doc = prompts.load_nudge_code()
+    model_cfg = doc.get("model", {})
+    provider = get_provider(model=model_cfg.get("id"))
+    if not provider.has_api_key():
+        raise JudgeError(
+            f"No API key for provider {provider.name!r}. Set {provider.api_key_env} in the "
+            "environment."
+        )
+
+    user_prompt = prompts.render_nudge_code_prompt(
+        doc, phase, problem, code, public_failures, compile_error,
+        hidden_failed, attempt, prior_artifacts,
+    )
+    result = provider.judge_json(
+        system=doc["system_prompt"],
+        user=user_prompt,
+        model=model_cfg.get("id") or provider.default_model,
+        max_output_tokens=int(model_cfg.get("max_output_tokens", 2000)),
+        effort=model_cfg.get("effort", "medium"),
+        schema=Nudge,
+    )
+    parsed: Nudge = result.parsed
+    known = {f["id"] for f in failing}
+    return {
+        "summary": parsed.summary,
+        # A focus the model invented would point the student at nothing. Fall back to
+        # the first real failure rather than rendering a dangling id.
+        "focus_id": parsed.focus_id if parsed.focus_id in known else failing[0]["id"],
+        "reason": parsed.reason,
+        "nudge": parsed.nudge,
+        "failing": failing,
     }

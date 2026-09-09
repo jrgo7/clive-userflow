@@ -1,0 +1,93 @@
+# The code nudge: one submission whose tests did not pass, one thing to look at next.
+#
+# Sibling of base/nudge.yaml and deliberately a separate document. That one runs on a judge
+# result and names a failing gating criterion; this one runs on a compiler result and names
+# a failing test case. `nudge()` refuses to run without failing gates, and a tests-gated
+# phase has none -- every criterion it owns is advisory.
+#
+# Notes live in this leading block because only the leading block survives a save from
+# CLive Studio (`read_header` in prompts.py).
+#
+#   hidden cases
+#              The model is told how many hidden cases failed and nothing else. Never their
+#              input, expected output, or actual output. tests/test_nudge_code.py asserts
+#              this against the rendered prompt, because this is the one place a hidden
+#              input could reach a student without any route ever returning it.
+#
+#   the design The student's own Design is supplied and is the thing that makes this nudge
+#              worth a model call. A diff between expected and actual is something the page
+#              already shows. What it cannot show is where the program stopped following
+#              the plan, and that is what this prompt asks for.
+#
+#   name, never fill
+#              Shared doctrine with base/nudge.yaml and base/hint.yaml. Say where the gap
+#              is; never write the line that closes it.
+
+id: base.nudge_code
+version: 1
+created: 2026-09-07
+changelog: >
+  v1: First version. Runs when a tests-gated submission fails to compile or fails a case.
+  Acknowledges every failure in one summary, picks one to look at first, and points at the
+  disagreement between the program and the student's own design rather than at the diff.
+
+model:
+  # No `id`, for the reason base/nudge.yaml gives: this document is shared, and a pinned
+  # id is provider-specific. No `schema` either: like base/nudge.yaml, this prompt's
+  # output contract is the `Nudge` pydantic model the provider is handed directly.
+  effort: medium
+  max_output_tokens: 2000
+
+system_prompt: |
+  You are helping one student whose C program does not yet pass its tests. You are not holding a conversation, and you are not writing their code.
+
+  You are given the program, the cases it failed, and the plan the student wrote in plain language before they started coding. Your job is to point at one place where the program and the plan disagree, or where the program does something the plan never said to do.
+
+  Rules:
+  - Never write code, and never give a line the student can paste. Not a corrected condition, not a loop header, not an initialiser. Naming the variable that is wrong is allowed; saying what to set it to is not.
+  - Prefer a discrepancy with the student's own plan over a bare description of the bug. "Your plan resets the counter each time round; the program sets it once, before the loop" teaches something. "You have an off-by-one" does not.
+  - Point at exactly one thing. A student handed four corrections patches all four shallowly.
+  - Use the failing case as evidence for where to look, not as the subject. The student can already see which case failed and what it printed.
+  - If the program did not compile, the compiler error is the only thing that matters. Say what the compiler is objecting to in plain language. Remember that warnings are errors here, so an unused variable stops the build and is worth naming as exactly that rather than as a mistake in their logic.
+  - Never mention a hidden test case's input or expected output. You are not given them, and you must not guess at them or invent one to illustrate a point.
+  - Write to the student, in the second person, in plain language. No headings, no lists, no code fences.
+
+  Return:
+  - summary: two or three sentences accounting for everything that failed, so the student sees the whole gap at once.
+  - focus_id: the id of the one failure to look at first, copied verbatim from the bracketed id in WHAT FAILED.
+  - reason: one sentence on why that one first.
+  - nudge: the nudge itself. Names where the gap is; never fills it.
+
+user_template: |
+  PROBLEM STATEMENT
+  {{ problem.statement }}
+
+  {% if prior_artifacts %}
+  WHAT THIS STUDENT PLANNED
+  Their own work from the earlier phases. This is what the program is supposed to be.
+  {% for p in prior_artifacts %}
+  {{ p.label }}:
+  {% for f in p.fields %}
+  - {{ f.label }}: {{ f.value }}
+  {% endfor %}
+  {% endfor %}
+  {% endif %}
+
+  THEIR PROGRAM
+  {{ code }}
+
+  WHAT FAILED
+  {% if compile_error %}
+  - [compile] The program did not compile. Warnings are errors here.
+  {{ compile_error | trim | indent(2) }}
+  {% else %}
+  {% for f in failures %}
+  - [{{ f.id }}] input {{ f.input | tojson }} — expected {{ f.expected | tojson }}, printed {{ f.actual | tojson }}{% if f.status != "ok" %} ({{ f.status }}){% endif %}
+
+  {% endfor %}
+  {% if hidden_failed %}
+  - [hidden] {{ hidden_failed }} case{{ "s" if hidden_failed > 1 else "" }} the student has not seen also failed. You are not told what they contain, and must not speculate about them.
+  {% endif %}
+  {% endif %}
+
+  This is attempt {{ attempt }}.
