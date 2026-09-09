@@ -196,6 +196,33 @@
                        overflow-x:auto; }
   .ledger .norule { font-size:12.5px; color:var(--ink-2); margin-top:6px; font-style:italic; }
 
+  .editor-host { border:1px solid var(--line-2); border-radius:8px; overflow:hidden;
+                 min-height:320px; background:var(--paper); }
+  .runbar { display:flex; gap:10px; align-items:center; margin-top:14px; flex-wrap:wrap; }
+  .runbar .tier { font-family:var(--mono); font-size:11px; color:var(--ink-3);
+                  margin-left:auto; }
+
+  .cases-out { margin-top:4px; }
+  .cases-out .case { display:flex; gap:12px; padding:11px 0; border-top:1px solid var(--line);
+                     align-items:flex-start; }
+  .cases-out .case:first-child { border-top:none; }
+  .cases-out .io { flex:1; min-width:0; display:grid; gap:7px;
+                   grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
+  .cases-out .io .k { font-family:var(--mono); font-size:10px; letter-spacing:.09em;
+                      text-transform:uppercase; color:var(--ink-3); margin-bottom:2px; }
+  .cases-out .io .v { font-family:var(--mono); font-size:12.5px; white-space:pre-wrap;
+                      word-break:break-word; background:var(--surface-2); border-radius:5px;
+                      padding:5px 8px; }
+  .cases-out .io .v.bad { background:var(--block-wash); color:var(--block); }
+  .cases-out .hidden-note { font-size:13.5px; color:var(--ink-2); }
+
+  .compile-error { font-family:var(--mono); font-size:12.5px; white-space:pre-wrap;
+                   background:var(--block-wash); color:var(--block); border-radius:8px;
+                   padding:12px 14px; overflow-x:auto; }
+  .warn-block { font-family:var(--mono); font-size:12.5px; white-space:pre-wrap;
+                background:var(--advise-wash); color:var(--advise); border-radius:8px;
+                padding:10px 12px; overflow-x:auto; margin-bottom:12px; }
+
   .banner { border-radius:10px; padding:13px 16px; font-size:14.5px; margin-bottom:16px; border:1px solid; }
   .banner.pass { background:var(--met-wash); border-color:var(--met); color:var(--met); }
   .banner.warn { background:var(--advise-wash); border-color:var(--advise); color:var(--advise); }
@@ -217,6 +244,7 @@
     .card { padding:17px 16px; }
   }
 </style>
+<script src="/editor.js"></script>
 </head>
 <body>
 
@@ -277,11 +305,41 @@ const S = { boot: null, problem: null, phases: [], i: 0, busy: null, error: null
 const cur = () => S.phases[S.i];
 const phase = () => S.boot.phases[S.i];
 
+/* A phase whose gate is a compiler rather than the judge. The page needs to know
+   because Run, the results panel and the editor only belong on that phase. */
+const isCodePhase = () => (phase().artifact_fields || []).some((f) => f.kind === "code");
+
+/* Editor hosts, cached per phase and field and reused across renders.
+
+   render() rebuilds the whole form on every state change, and a fresh CLiveEditor.mount
+   each time would leak one Monaco instance per render and throw away the cursor. Moving
+   an existing node into the new tree keeps the instance that is already on it. Cleared
+   when the problem changes, because that is a different session. */
+const editorHosts = new Map();
+
+function editorHost(f, st) {
+  const key = `${S.i}:${f.id}`;
+  const cached = editorHosts.get(key);
+  if (cached) return cached;
+  const host = h("div", { class: "editor-host" });
+  editorHosts.set(key, host);
+  // Mounted after the node reaches the document, or Monaco measures zero height.
+  queueMicrotask(() => CLiveEditor.mount(host, {
+    value: st.artifact[f.id] || "",
+    language: f.language || "c",
+    onChange: (v) => { st.artifact[f.id] = v; save(); },
+  }));
+  return host;
+}
+
 function freshSession() {
   return S.boot.phases.map((p, i) => ({
-    artifact: Object.fromEntries((p.artifact_fields || []).map((f) => [f.id, ""])),
+    artifact: Object.fromEntries((p.artifact_fields || []).map((f) => [
+      f.id,
+      f.kind === "code" ? (S.problem && S.problem.starter_code) || "" : "",
+    ])),
     attempt: 1, passed: false, unlocked: i === 0,
-    result: null, hint: null, history: [],
+    result: null, hint: null, history: [], testRun: null,
   }));
 }
 
@@ -370,6 +428,14 @@ function renderForm() {
 
   const fields = h("div", { class: "fields" });
   for (const f of p.artifact_fields || []) {
+    if (f.kind === "code") {
+      fields.append(h("div", { class: "fld" }, [
+        h("label", { text: f.label || f.id }),
+        f.hint ? h("div", { class: "help", text: f.hint }) : null,
+        editorHost(f, st),
+      ]));
+      continue;
+    }
     const ta = h("textarea", {
       rows: f.rows || 4, "aria-label": f.label || f.id,
       oninput: (e) => { st.artifact[f.id] = e.target.value; save(); },
@@ -393,6 +459,24 @@ function renderForm() {
   if (st.history.length) {
     acts.append(h("span", { class: "stat",
       text: st.history.slice(-3).map((x) => `#${x.n}: ${x.blocked} blocking`).join("  ·  ") }));
+  }
+  if (isCodePhase()) {
+    const ex = S.boot.executor || {};
+    acts.prepend(h("button", {
+      class: "btn ghost", type: "button",
+      disabled: !!S.busy || empty || !ex.available,
+      text: S.busy === "run" ? "Running…" : "Run",
+      title: ex.available ? "Check against the examples you were given. Costs nothing."
+                          : ex.error || "No compiler is available on the server.",
+      onclick: runCode,
+    }));
+    if (!ex.available) {
+      card.append(h("div", { class: "banner err", style: "margin-top:12px",
+        text: ex.error || "No compiler is available on the server, so Run and Submit are off." }));
+    } else {
+      acts.append(h("span", { class: "tier",
+        text: `${ex.name} · ${ex.isolation}` }));
+    }
   }
   card.append(acts);
   return card;
@@ -461,6 +545,52 @@ function renderLedger(r) {
   return card;
 }
 
+function renderTestRun(tr) {
+  const card = h("div", { class: "fb" }, [
+    h("h3", { text: tr.compiled
+      ? `Test cases — ${tr.counts.passed} of ${tr.counts.total} passing`
+      : "It did not compile" }),
+  ]);
+
+  if (!tr.compiled) {
+    card.append(h("div", { class: "compile-error", text: tr.compile_error.trim() ||
+      "The compiler gave no output." }));
+    card.append(h("div", { class: "foot",
+      text: "Warnings are treated as errors here, so an unused variable will stop the build." }));
+    return card;
+  }
+
+  if (tr.warnings && tr.warnings.trim()) {
+    card.append(h("div", { class: "warn-block", text: tr.warnings.trim() }));
+  }
+
+  const list = h("div", { class: "cases-out" });
+  tr.cases.forEach((c, i) => {
+    const badge = h("span", { class: `badge ${c.passed ? "met" : "block"}`,
+      text: c.passed ? "Pass" : "Fail" });
+    if (c.hidden) {
+      list.append(h("div", { class: "case" }, [badge,
+        h("div", { class: "hidden-note",
+          text: `A case you have not seen${c.passed ? "" : " — this one did not pass"}.` })]));
+      return;
+    }
+    const cell = (k, v, bad) => h("div", {}, [
+      h("div", { class: "k", text: k }),
+      h("div", { class: `v ${bad ? "bad" : ""}`, text: v === "" ? "(empty)" : v }),
+    ]);
+    const io = h("div", { class: "io" }, [
+      cell("Input", c.input),
+      cell("Expected", c.expected),
+      cell(c.status === "ok" ? "Your output" : c.status.replace("_", " "),
+           c.status === "timeout" ? "(it ran too long and was stopped)" : c.actual,
+           !c.passed),
+    ]);
+    list.append(h("div", { class: "case" }, [badge, io]));
+  });
+  card.append(list);
+  return card;
+}
+
 function renderStage() {
   const stage = document.getElementById("stage");
   const st = cur();
@@ -485,6 +615,8 @@ function renderStage() {
       h("span", { class: "pulse" }),
       h("span", { text: S.busy === "submit"
         ? "Checking your work against every requirement…"
+        : S.busy === "run"
+        ? "Compiling and running your program…"
         : "Looking for somewhere useful to point…" }),
     ])));
   }
@@ -497,6 +629,7 @@ function renderStage() {
     out.push(h("div", { class: "banner pass",
       text: (next ? `Phase passed. ${next.label} is open.` : "Phase passed. That was the last one.") + extra }));
   }
+  if (st.testRun) out.push(renderTestRun(st.testRun));
   if (r && r.nudge) out.push(renderNudge(r.nudge));
   if (r && r.nudge_error) {
     out.push(h("div", { class: "banner warn",
@@ -508,7 +641,7 @@ function renderStage() {
   if (st.passed && S.i === S.boot.phases.length - 1) {
     out.push(h("div", { class: "card done" }, [
       h("h2", { text: "Every phase passed" }),
-      h("p", { text: "You have a definition you wrote yourself, cases you worked by hand, and a plan that accounts for them. Implementation comes next — and you now have something to check it against." }),
+      h("p", { text: "A definition you wrote yourself, cases you worked by hand, a plan that accounts for them, and a program that carries it out." }),
     ]));
   }
 
@@ -523,6 +656,7 @@ function ctx(extra) {
     phase_id: phase().phase,
     problem_id: S.problem.slug,
     artifact: cur().artifact,
+    code: cur().artifact.code || "",
     attempt: cur().attempt,
     prior_artifacts: priorArtifacts(),
     ...extra,
@@ -541,12 +675,30 @@ async function askHint() {
   }
 }
 
+async function runCode() {
+  const st = cur();
+  S.busy = "run"; S.error = null; st.hint = null; render();
+  try {
+    st.testRun = await api("POST", "/api/student/run", {
+      problem_id: S.problem.slug,
+      code: st.artifact.code || "",
+    });
+    // A Run is not a submission: it never clears a verdict list the student is
+    // still reading, and it never costs an attempt.
+  } catch (e) {
+    S.error = e.message;
+  } finally {
+    S.busy = null; save(); render();
+  }
+}
+
 async function submit() {
   const st = cur();
   S.busy = "submit"; S.error = null; st.hint = null; st.result = null; render();
   try {
     const r = await api("POST", "/api/student/submit", ctx({}));
     st.result = r;
+    if (r.test_run) st.testRun = r.test_run;
     st.history.push({ n: st.attempt, blocked: r.blocking.length });
     if (r.passed) {
       st.passed = true;
@@ -565,6 +717,7 @@ async function submit() {
 async function loadProblem(slug, { fresh = false } = {}) {
   const d = await api("GET", `/api/student/problem/${slug}`);
   S.problem = d.problem;
+  editorHosts.clear();
   if (fresh || !restore(slug)) { S.phases = freshSession(); S.i = 0; }
   S.error = null;
   document.getElementById("problem-pick").value = slug;
