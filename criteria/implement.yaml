@@ -1,0 +1,61 @@
+# Criteria for phase.implement (the "I" of PCDIT).
+#
+# Every criterion here is `advisory`, and tests/test_implement_content.py fails the suite
+# if one is not. This phase is gated by the compiler: the tests decide whether the student
+# advances, and these criteria are the review that happens afterwards. A `gating` entry
+# would let the judge hold a student on code that passes every case.
+#
+# They are also all *comparative*. The question is never "is this good C" in the abstract,
+# it is "is this the program the student planned" -- which is the only question that needs
+# the earlier phases, and the only one a plain autograder cannot ask.
+
+id: criteria.implement
+phase: implement
+version: 1
+
+criteria:
+  - id: follows_own_design
+    text: The program carries out the steps of the student's own Design, in that order.
+    gate: advisory
+    guidance: |
+      PASS if a reader holding the Design beside the code can match the plan's steps onto
+      the program -- the same work happening in the same order. Extra code the plan did
+      not mention is fine when it serves a step (reading input, printing the result).
+      FAIL if the program reaches the right answer by a route the plan does not describe:
+      a different traversal, a different decomposition, a step the plan required that the
+      code does not perform. Do not fail this because the code is more detailed than the
+      plan -- a plan is meant to be less specific than the program.
+
+  - id: state_matches_design
+    text: The variables correspond to the state the student said the algorithm keeps.
+    gate: advisory
+    guidance: |
+      PASS if each thing the Design named as state -- a counter, a total, a flag, an array
+      -- exists in the program, and the program does not silently depend on state the plan
+      never mentioned. Names need not match; roles must.
+      FAIL if a named piece of state is absent, or if the program carries something between
+      iterations that the plan does not account for. A loop index or a scratch variable
+      local to one step is not state and does not fail this.
+
+  - id: handles_own_edge_cases
+    text: The edge cases the student invented in Cases are handled deliberately.
+    gate: advisory
+    guidance: |
+      PASS if, for each edge case the student wrote in the Cases phase, the code contains
+      something that addresses it -- a guard, a branch, an initialisation, or a loop
+      structure that plainly covers it.
+      FAIL if an edge case the student themselves identified works only by accident, with
+      nothing in the program written for it. Say which case. If the Cases phase named no
+      edge cases, FAIL with an empty evidence string: the gap is real and worth reporting,
+      even though it is not this phase's doing.
+
+  - id: readable
+    text: The program can be followed by a person reading it once.
+    gate: advisory
+    guidance: |
+      PASS if names say what they hold, the structure is flat enough to follow, and a
+      reader does not have to simulate the program to understand it.
+      FAIL only for something a reader would genuinely stumble on: single-letter names for
+      values that carry meaning, a condition compounded past the point of reading, repeated
+      blocks that obscure what differs. Do not fail this for formatting, brace style,
+      comment density, or any preference a linter would settle.

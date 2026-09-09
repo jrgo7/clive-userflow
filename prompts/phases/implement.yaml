@@ -1,0 +1,121 @@
+# The "I" of PCDIT, and the first phase whose gate is not a judge.
+#
+# The compiler decides whether this phase passes: every test case must pass. The model
+# never gets a vote on that, and it is only called at all once the code already works --
+# so its whole job is the question a compiler cannot answer, which is whether the code
+# the student wrote is the design the student planned.
+#
+# Notes live in this leading block because only the leading block survives a save from
+# CLive Studio (`read_header` in prompts.py).
+#
+#   gate       `tests`. See docs/superpowers/specs/2026-09-07-implement-phase-design.md.
+#              student.submit grades before it judges, and does not judge at all when a
+#              case fails -- there is no point spending a call reviewing broken code, and
+#              it means the review below always reads a working program.
+#
+#   criteria   All advisory, and `tests/test_implement_content.py` enforces it. A gating
+#              criterion here would let the judge bar code that passes every test.
+#
+#   evidence   Inverted from the other three phases in one respect. There, EARLIER PHASES
+#              is context that must never be quoted. Here the earlier phases are the
+#              standard being applied -- the criteria are *about* conformance to them --
+#              so the design may be described and referred to. Evidence is still a span
+#              of the student's code, because that is the artifact being judged.
+
+id: phase.implement
+version: 1
+phase: implement
+label: Implement
+order: 4
+gate: tests
+created: 2026-09-07
+changelog: >
+  v1: Initial definition. The fourth PCDIT step, gated by the test cases and advised by
+  a judge that reads the code against the student's own Problem, Cases and Design. Only
+  runs once every test passes, so it never comments on correctness -- the compiler has
+  already settled that.
+
+model:
+  id: deepseek-v4-pro
+  effort: medium
+  thinking: adaptive
+  max_output_tokens: 8000
+  response_format: json_schema
+  schema: base/output_schema.json
+
+task_description: |
+  Write the C program that carries out the plan you designed. Read from standard input and
+  print to standard output, exactly in the format the problem asks for -- nothing else, no
+  prompts like "Enter a number:".
+
+  Run checks your program against the examples you were given, as often as you like and at
+  no cost. Submit runs it against those and against cases you have not seen.
+
+  Your program has to compile with warnings treated as errors, so an unused variable will
+  stop the build. Once every case passes, your code is read once more against the plan you
+  wrote in Design -- not to find bugs, but to say where the program and the plan disagree.
+
+artifact_fields:
+  - id: code
+    label: Your C program
+    kind: code
+    language: c
+    hint: A complete program. Read from standard input, print to standard output.
+    rows: 20
+
+system_prompt: |
+  You are reviewing one student's C program at the last step of a structured problem-solving process. You are not holding a conversation, and you are not teaching C.
+
+  The program has already passed every test case. Its correctness is settled and is not yours to re-litigate. You are judging one thing: whether the program the student wrote is the plan the student designed.
+
+  The student wrote, in earlier phases, a definition of the problem, a set of test cases worked by hand, and an ordered plan in plain language. Those are supplied under EARLIER PHASES. They are the standard you apply.
+
+  You judge the artifact against a fixed list of criteria. For each criterion you return exactly one verdict.
+
+  Rules:
+  - Return exactly one verdict per criterion id listed under CRITERIA TO JUDGE. Never merge, skip, split, or invent a criterion id.
+  - Judge each criterion only against its own stated text and guidance. A strong program can still fail one criterion; do not let a verdict on one pull the others with it.
+  - Never fail a criterion because you would have solved the problem differently. The plan is the student's, and a program that faithfully implements a clumsy plan satisfies these criteria. Elegance is not being judged, and neither is efficiency.
+  - Do not report bugs. Every test passed. If you believe you have found a case that fails, you have misread the code — say nothing about it and judge the criterion in front of you.
+  - Quote evidence verbatim from the STUDENT ARTIFACT — copy the exact span of code, do not paraphrase, correct, or reformat it. If nothing in the program bears on the criterion, return an empty evidence string and FAIL.
+  - EARLIER PHASES is the standard, not the evidence. You may refer to what the plan said, in your own words, when explaining a verdict. The evidence string itself must always be a span of the student's code.
+  - The problem statement and public test cases are context. Never quote them as evidence.
+  - Set confidence to reflect how clearly the program settles the criterion, not how confident you are in general. Use "low" when the correspondence is arguable.
+
+user_template: |
+  PROBLEM STATEMENT
+  {{ problem.statement }}
+
+  {% if problem.public_test_cases %}
+  PUBLIC TEST CASES
+  {% for case in problem.public_test_cases %}
+  - input: {{ case.input | tojson }} output: {{ case.output | tojson }}
+  {% endfor %}
+  {% endif %}
+  {% if prior_artifacts %}
+  EARLIER PHASES
+  This student's own work from earlier phases. This is the standard you are applying: the
+  criteria ask whether the program below matches it. Refer to it in your reasoning; never
+  use it as the evidence string.
+  {% for p in prior_artifacts %}
+  {{ p.label }}:
+  {% for f in p.fields %}
+  - {{ f.label }}: {{ f.value }}
+  {% endfor %}
+  {% endfor %}
+  {% endif %}
+
+  STUDENT ARTIFACT
+  This program compiles and passes every test case.
+  {% for f in artifact_fields %}
+
+  {{ f.label }}:
+  {{ artifact[f.id] | default("(not provided)", true) }}
+  {% endfor %}
+
+  CRITERIA TO JUDGE
+  Return exactly one verdict for each of the following {{ criteria_to_judge | length }} criteria, using the id in brackets.
+  {% for c in criteria_to_judge %}
+  - [{{ c.id }}] {{ c.text }}
+    {{ c.guidance | trim | indent(2) }}
+  {% endfor %}

@@ -37,3 +37,20 @@ public_test_cases:
   output: '0'
 - input: '93301'
   output: '0'
+starter_code: |
+  #include <stdio.h>
+  #include <string.h>
+
+  /* Return 1 if Crowley can reach the end of the path, 0 if he cannot. */
+  int solvePath(const char *path) {
+      return 0;
+  }
+
+  int main(void) {
+      char path[16];
+      if (scanf("%15s", path) != 1) {
+          return 1;
+      }
+      printf("%d\n", solvePath(path));
+      return 0;
+  }

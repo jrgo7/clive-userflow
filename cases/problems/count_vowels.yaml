@@ -21,3 +21,17 @@ public_test_cases:
   output: '3'
 - input: rhythm
   output: '0'
+starter_code: |
+  #include <stdio.h>
+  #include <string.h>
+
+  int main(void) {
+      char line[128];
+      if (fgets(line, sizeof line, stdin) == NULL) {
+          return 1;
+      }
+
+      /* Count the vowels in `line`, then print the count. */
+
+      return 0;
+  }

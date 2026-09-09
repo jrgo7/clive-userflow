@@ -10,7 +10,7 @@ from clive import prompts
 
 
 def test_existing_problem_defaults_both_keys():
-    problem = prompts.load_problem("count_vowels")
+    problem = prompts.load_problem("grade_average")
     assert problem["starter_code"] == ""
     assert problem["hidden_test_cases"] == []
 
