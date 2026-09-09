@@ -45,6 +45,16 @@ class Limits:
     memory_mb: int = 256
     pids: int = 64
     output_bytes: int = 64 * 1024
+    #: Best-effort cap on the work directory's total size, checked once after each run
+    #: -- see LocalExecutor.execute. local/local-bwrap already bound this harder, with
+    #: RLIMIT_FSIZE applied straight to the student's process; this exists for the
+    #: container backend, which has no such rlimit (a Python rlimit would cap the
+    #: podman/docker client, not the containerized program -- see
+    #: ContainerExecutor.preexec_for_run) and would otherwise report `ok` for a run
+    #: that filled its work directory's bind mount. A post-hoc check, not a hard cap:
+    #: it cannot stop the bytes from landing on host disk within the run's own time
+    #: budget, only stop the run from being misreported as successful once they have.
+    workdir_bytes: int = 256 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -59,7 +69,7 @@ class ExecutionRequest:
     limits: Limits = field(default_factory=Limits)
 
 
-RunStatus = Literal["ok", "timeout", "runtime_error", "output_truncated"]
+RunStatus = Literal["ok", "timeout", "runtime_error", "output_truncated", "disk_exceeded"]
 
 
 @dataclass(frozen=True)

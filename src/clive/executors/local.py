@@ -93,6 +93,38 @@ def _rlimits(limits: Limits, nproc_ceiling: int):
     return apply
 
 
+def _workdir_bytes(path: Path) -> int:
+    """Best-effort total size, in bytes, of every regular file under `path`.
+
+    Never raises: a file that vanishes mid-walk -- the student's own program
+    deleting its own output, a compiler temp file cleaned up between the stat and
+    the walk reaching it -- is skipped rather than treated as an error. This is a
+    disk-usage check, not a filesystem-integrity one, and it runs after every run
+    step; it must never be the thing that turns a clean run into a crash.
+    """
+    total = 0
+    try:
+        it = path.rglob("*")
+    except OSError:
+        return total
+    while True:
+        # Advancing `it` does its own I/O (pathlib's glob walks the tree lazily), so
+        # an OSError can surface here too, not only at the `rglob("*")` call above --
+        # a directory that becomes unreadable, or vanishes, mid-walk.
+        try:
+            entry = next(it)
+        except StopIteration:
+            break
+        except OSError:
+            continue
+        try:
+            if entry.is_file() and not entry.is_symlink():
+                total += entry.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
 def _spawn(argv, cwd, stdin_text, timeout, preexec) -> tuple[int, str, str, bool]:
     """Run one command to completion. Returns (exit_code, stdout, stderr, timed_out).
 
@@ -308,6 +340,19 @@ class LocalExecutor(Executor):
                     status = "runtime_error"
                 else:
                     status = "ok"
+
+                # Only matters for the container backend in practice: local/bwrap
+                # already bound this harder, with RLIMIT_FSIZE applied straight to
+                # the student's process (_rlimits, above) -- a run that got this far
+                # there could not have written this much to begin with. Checked here,
+                # in the run loop every backend shares, rather than per-backend, so a
+                # fourth backend joining the registry inherits it rather than needing
+                # its own copy. `workdir` accumulates across every run of one request
+                # (compile then N runs share it), so this is the request's total
+                # footprint so far, not just this one run's.
+                if status == "ok" and _workdir_bytes(workdir) > limits.workdir_bytes:
+                    status = "disk_exceeded"
+
                 runs.append(RunOutcome(status, out, err, rc, duration))
 
             return ExecutionResult(True, "", cerr, runs)
