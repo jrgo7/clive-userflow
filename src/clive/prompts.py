@@ -543,18 +543,21 @@ def list_problems() -> list[dict]:
 def load_problem(problem_id: str) -> dict:
     data = read_yaml(problem_path(problem_id))
     data.setdefault("public_test_cases", [])
+    data.setdefault("hidden_test_cases", [])
+    data.setdefault("starter_code", "")
     data["slug"] = problem_id
     return data
 
 
-def save_problem(problem_id: str, data: dict) -> dict:
-    problem_id = check_slug(problem_id, "problem id")
-    if not str(data.get("statement", "")).strip():
-        raise ContentError("A problem needs a statement.")
+def _clean_cases(rows: Any) -> list[dict]:
+    """Normalise a list of test cases, dropping rows the user left blank.
 
+    Shared by the public and hidden lists so the two cannot drift apart -- a hidden
+    case that normalised differently from a public one would grade differently for
+    no reason a reader could see.
+    """
     cases = []
-    for case in data.get("public_test_cases") or []:
-        # A row with neither half filled in is one the user left behind.
+    for case in rows or []:
         if not str(case.get("input", "")).strip() and not str(case.get("output", "")).strip():
             continue
         cases.append(
@@ -563,6 +566,17 @@ def save_problem(problem_id: str, data: dict) -> dict:
                 "output": str(case.get("output", "")).replace("\r\n", "\n"),
             }
         )
+    return cases
+
+
+def save_problem(problem_id: str, data: dict) -> dict:
+    problem_id = check_slug(problem_id, "problem id")
+    if not str(data.get("statement", "")).strip():
+        raise ContentError("A problem needs a statement.")
+
+    cases = _clean_cases(data.get("public_test_cases"))
+    hidden = _clean_cases(data.get("hidden_test_cases"))
+    starter = str(data.get("starter_code") or "").replace("\r\n", "\n")
 
     topics = data.get("topics") or []
     if isinstance(topics, str):
@@ -575,6 +589,10 @@ def save_problem(problem_id: str, data: dict) -> dict:
         "topics": topics,
         "statement": _as_block(data["statement"]),
         "public_test_cases": cases,
+        # Omitted entirely when empty: a problem that has neither key should not gain
+        # two of them on the next Studio save, which would dirty all nine files at once.
+        **({"hidden_test_cases": hidden} if hidden else {}),
+        **({"starter_code": starter} if starter.strip() else {}),
     }
     path = problem_path(problem_id)
     write_yaml(path, ordered, read_header(path))
