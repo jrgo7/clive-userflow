@@ -2,6 +2,23 @@
 
 > Please update this file whenever prompts are changed by documenting why each version changed.
 
+## 2026-09-07 — implement.yaml v1, nudge_code.yaml v1
+
+Adds the fourth PCDIT phase, and with it the first prompt in this repo that is not
+judging prose.
+
+`phases/implement.yaml` v1. Its system prompt inverts one rule the other three share:
+there, EARLIER PHASES is context that must never be quoted; here the earlier phases are
+the *standard being applied*, because every criterion asks whether the program matches
+the plan. Evidence is still a span of the student's code. The prompt also states that
+correctness is settled before it runs — the judge is only called once every test passes —
+so it can be written to comment on conformance without hedging about bugs.
+
+`base/nudge_code.yaml` v1. A separate document from `base/nudge.yaml` because the two take
+different inputs: that one is handed failing gating criteria, this one failing test cases
+and a compiler. It exists to say something the diff cannot — where the program stopped
+following the plan. Hidden cases reach it as a count and never as I/O.
+
 ## base/personas.yaml v5 - nods_along cannot write either - 2026-09-02
 
 **`nods_along` is now inarticulate as well as lost.** Getting a thought into words is hard

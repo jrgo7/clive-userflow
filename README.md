@@ -40,7 +40,7 @@ else, so the notebooks, the Studio, and `git diff` never disagree.
 | **Simulate** | An LLM persona walks the whole session while you watch — see below | nothing |
 | **Personas** | Read-only: every persona, and the exact prompt it would be sent | nothing |
 
-The phase strip at the top switches between the three phases. Run reports each verdict with
+The phase strip at the top switches between the four phases. Run reports each verdict with
 its evidence quote, and flags a quote that does not actually appear in the artifact — the
 prompt demands verbatim quotation, so a quote that cannot be found means the judge asserted
 rather than observed.
@@ -145,6 +145,51 @@ Feedback reads in three colours, not two: **Met**, **Blocks** (a gating FAIL, wh
 attempt), and **Depth** (an advisory FAIL, which is reported and never blocks). The session
 lives in the browser's `localStorage`, keyed by problem — this system has no user model yet.
 
+## The Implement phase
+
+The fourth phase is the first whose gate is not a judge. The student writes C in an
+editor, **Run** checks it against the examples they were given, and **Submit** checks it
+against those plus `hidden_test_cases` — cases the student has never seen, which
+`student.problem()` never sends to the browser in the first place. Every case must pass;
+the model gets no vote on that.
+
+Once it passes, the code is judged once more against the student's own Problem, Cases and
+Design — not for bugs, which the tests have already settled, but for whether the program
+is the plan. Every criterion in `criteria/implement.yaml` is advisory and
+`tests/test_implement_content.py` fails the suite if one is not: a gating criterion there
+would let the judge bar code that demonstrably works.
+
+**A failing submission is not judged at all.** It is nudged instead, by
+`prompts/base/nudge_code.yaml`, which sees the code, the failing public cases, and the
+student's design — so it can say where the program stopped following the plan rather than
+restating the diff the page already shows.
+
+**Where the code runs.** `src/clive/executors/` mirrors `src/clive/providers/` for the
+registry and the environment variable that picks a backend, but not file-for-file:
+`local.py` holds two executors, bare and bubblewrap, because they differ only in how they
+wrap the command. `get_executor()` probes and takes the strongest that works — a container
+(podman or docker, with the image pinning gcc), then bubblewrap, then bare rlimits — and
+`CLIVE_SANDBOX_FLOOR` refuses anything weaker than you specify. Set it to `namespace` or
+better on a host serving more than one person. `bwrap`'s probe runs bubblewrap rather than
+testing for the binary, because it can be installed and still fail where unprivileged user
+namespaces are restricted.
+
+**Contract, and where it differs from AnimoRank.** The compile and run lines are
+AnimoRank's verbatim (`gcc -Werror -Wall -o program main.c -lm -lpthread`, then
+`./program`), and so is the public/all split between Run and Submit. Four things differ,
+and the first is load-bearing:
+
+- **Trailing whitespace is normalised before comparison.** AnimoRank compares stdout
+  strictly. Every problem in `cases/problems/` stores its expected output without a
+  trailing newline, so a strict comparison rejects a correct program that ends with
+  `printf("%d\n", ...)` — on all nine.
+- Compiled once and run N times, rather than once per case.
+- 5s per run rather than 30, with the memory cap applied to the run and never to gcc —
+  `--memory`/`--pids-limit` for the container backend, `RLIMIT_AS` for the local ones,
+  neither ever passed to the compile step.
+- `FunctionOutputTestCase` is not ported. `crowley_path` gets its `solvePath()` harness
+  through `starter_code` instead.
+
 ## Sandbox mode
 
 **Enter sandbox** in the header swaps the editors onto a scratch copy held in the browser.
@@ -168,16 +213,18 @@ Because the Session judges the *sandbox* copy, an edit you make in the Criteria 
 the very next submission — which is the point: you can watch a rubric change land on a real
 answer instead of guessing at it.
 
-## The three phases
+## The four phases
 
-The first three steps of PCDIT, the ones where a judge reads prose rather than code.
-Implement and Test stay with AnimoRank's autograder.
+The first four steps of PCDIT. The first three are judged by a model reading prose; the
+fourth is gated by a compiler, and the model only reviews code that already works. Test
+stays with AnimoRank's autograder.
 
 | Phase | id | The student submits |
 |---|---|---|
 | **Problem** | `problem_definition` | A restatement of the task, its inputs, and its outputs |
 | **Cases** | `case_design` | Test cases worked by hand, including edge cases, with the tracing shown |
 | **Design** | `algorithm_design` | An ordered plan in plain language, the state it carries, and how the output is produced |
+| **Implement** | `implement` | A C program, checked against the problem's test cases |
 
 A phase is a single YAML file. `artifact_fields` declares what the student submits; the
 template's STUDENT ARTIFACT block loops over it, so adding a field in the Studio reaches the
@@ -197,6 +244,9 @@ src/clive/                    prompts.py (load/render/save), judge.py / hint.py 
 src/clive/persona.py          a simulated student writing one phase; simulate.py runs the session
 src/clive/studio/             server.py (routes + Studio), student.py (the student-facing API)
 src/clive/providers/          one file per model vendor; CLIVE_PROVIDER picks which the judge uses
+src/clive/executors/          container.py, local.py (two backends) and a registry; CLIVE_EXECUTOR picks which
+src/clive/grade.py            one submission against a problem's test cases
+src/clive/studio/static/editor.js   the Monaco module, shared by both pages
 ```
 
 ## Conventions
