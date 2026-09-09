@@ -252,7 +252,10 @@ pre.preview {
 .rub-row details { margin-top: 6px; }
 .rub-row summary { cursor: pointer; font-size: 12px; color: var(--ink-2); }
 .rub-row .guide { white-space: pre-wrap; font-size: 12.5px; color: var(--ink-2); margin-top: 6px; }
+.editor-host { border:1px solid var(--line); border-radius:8px; overflow:hidden;
+               min-height:260px; background:var(--bg); }
 </style>
+<script src="/editor.js"></script>
 </head>
 <body>
 
@@ -399,6 +402,10 @@ async function loadProblem(slug) {
     const d = await api("GET", `/api/problem/${slug}`);
     S.problem = d.problem;
   }
+  // The starter-code editor is cached across renders (see starterCodeHost below); this
+  // is the one place S.problem's *identity* changes for a reason other than saving it
+  // back, so it is the one place that stale cache has to go.
+  starterHosts.clear();
   S.problemSlug = slug;
   S.dirty.problem = false;
 }
@@ -917,6 +924,64 @@ function problemPicker(onchange) {
   return s;
 }
 
+/* One test-case table. Used for both lists: they differ only in which key they
+   write and in what the student is allowed to see, never in how they are edited. */
+function testCaseTable(list, onChange) {
+  const cases = el("div");
+  if (!list.length) cases.append(el("p", { className: "empty", textContent: "None yet." }));
+
+  list.forEach((tc, i) => {
+    const head = el("div", { className: "head" }, [el("div", { className: "grip", textContent: `#${i + 1}` })]);
+    head.append(...reorderControls(list, i, onChange));
+    const del = el("button", { className: "mini", textContent: "Remove" });
+    del.onclick = () => { list.splice(i, 1); onChange(); };
+    head.append(el("div", { style: "flex:1" }), del);
+
+    cases.append(el("div", { className: "item" }, [
+      head,
+      el("div", { className: "row" }, [
+        field("input", textArea(tc.input, (v) => { tc.input = v; markDirty("problem"); }, 3, true)),
+        field("output", textArea(tc.output, (v) => { tc.output = v; markDirty("problem"); }, 3, true)),
+      ]),
+    ]));
+  });
+
+  const add = el("button", { className: "act ghost", textContent: "+ Add test case" });
+  add.onclick = () => { list.push({ input: "", output: "" }); onChange(); };
+  return [cases, add];
+}
+
+/* Starter-code editor host, cached per problem and reused across renderProblem()
+   re-renders.
+
+   Adding, removing or reordering ANY test case (public or hidden) calls
+   markDirty("problem") followed by render(), which rebuilds the whole Problem tab --
+   this card included. A fresh CLiveEditor.mount on every one of those renders would
+   leak a Monaco instance and reset the starter-code editor's cursor/scroll position
+   every time a completely unrelated row is added or removed. Keyed by problem slug,
+   which is enough since there is only ever one starter-code field per problem; cleared
+   in loadProblem, the one place the problem being edited actually changes.
+
+   onChange writes to S.problem directly rather than closing over the `p` this was
+   mounted with: saveProblem() replaces S.problem with a fresh object from the server
+   on every save, but this cached host (deliberately) survives that swap uncached. A
+   closure over the original `p` would keep writing to an object nothing reachable
+   still points at, silently dropping any edit made after the first save. */
+const starterHosts = new Map();
+
+function starterCodeHost(slug, initialValue) {
+  const cached = starterHosts.get(slug);
+  if (cached) return cached;
+  const host = el("div", { className: "editor-host" });
+  starterHosts.set(slug, host);
+  queueMicrotask(() => CLiveEditor.mount(host, {
+    value: initialValue || "",
+    language: "c",
+    onChange: (v) => { S.problem.starter_code = v; markDirty("problem"); },
+  }));
+  return host;
+}
+
 function renderProblem() {
   const p = S.problem;
   const out = el("div");
@@ -958,36 +1023,41 @@ function renderProblem() {
     field("statement", textArea(p.statement, (v) => { p.statement = v; markDirty("problem"); }, 12)),
   ]));
 
-  const cases = el("div");
-  const list = p.public_test_cases || (p.public_test_cases = []);
-  if (!list.length) cases.append(el("p", { className: "empty", textContent: "No public test cases." }));
-
-  list.forEach((tc, i) => {
-    const head = el("div", { className: "head" }, [el("div", { className: "grip", textContent: `#${i + 1}` })]);
-    head.append(...reorderControls(list, i, () => { markDirty("problem"); render(); }));
-    const del = el("button", { className: "mini", textContent: "Remove" });
-    del.onclick = () => { list.splice(i, 1); markDirty("problem"); render(); };
-    head.append(el("div", { style: "flex:1" }), del);
-
-    cases.append(el("div", { className: "item" }, [
-      head,
-      el("div", { className: "row" }, [
-        field("input", textArea(tc.input, (v) => { tc.input = v; markDirty("problem"); }, 3, true)),
-        field("output", textArea(tc.output, (v) => { tc.output = v; markDirty("problem"); }, 3, true)),
-      ]),
-    ]));
-  });
-
-  const addCase = el("button", { className: "act ghost", textContent: "+ Add test case" });
-  addCase.onclick = () => { list.push({ input: "", output: "" }); markDirty("problem"); render(); };
+  const onCases = () => { markDirty("problem"); render(); };
+  const publicList = p.public_test_cases || (p.public_test_cases = []);
+  const hiddenList = p.hidden_test_cases || (p.hidden_test_cases = []);
 
   out.append(el("div", { className: "card" }, [
     el("h3", { textContent: "Public test cases" }),
     el("p", {
       className: "sub",
-      textContent: "Given to the student, and shown to the judge as context. The judge is told never to quote them as evidence.",
+      textContent: "Given to the student, shown on the problem brief, and checked by Run. "
+        + "Also shown to the judge as context, which is told never to quote them as evidence.",
     }),
-    cases, addCase,
+    ...testCaseTable(publicList, onCases),
+  ]));
+
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: "Hidden test cases" }),
+    el("p", {
+      className: "sub",
+      textContent: "Checked only on Submit, and never sent to the browser — the student is "
+        + "told a hidden case failed and nothing else. Nothing here reaches a nudge prompt "
+        + "either, so do not rely on one to explain a failure the student cannot see.",
+    }),
+    ...testCaseTable(hiddenList, onCases),
+  ]));
+
+  out.append(el("div", { className: "card" }, [
+    el("h3", { textContent: "Starter code" }),
+    el("p", {
+      className: "sub",
+      textContent: "What the student's editor opens with. It must compile: with -Werror in "
+        + "play, a skeleton that does not build makes a student's first Run fail before they "
+        + "have written anything. Give it a main() that reads the input and prints nothing "
+        + "useful, and let them fill in the middle.",
+    }),
+    starterCodeHost(S.problemSlug, p.starter_code),
   ]));
 
   return out;
@@ -1021,6 +1091,8 @@ async function newProblem() {
       topics: [],
       statement: "Describe the task here.\n",
       public_test_cases: [],
+      hidden_test_cases: [],
+      starter_code: "#include <stdio.h>\n\nint main(void) {\n    return 0;\n}\n",
     });
     S.boot.problems = d.problems;
     await loadProblem(slug);
