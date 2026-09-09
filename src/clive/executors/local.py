@@ -302,3 +302,70 @@ class LocalExecutor(Executor):
                 runs.append(RunOutcome(status, out, err, rc, duration))
 
             return ExecutionResult(True, "", cerr, runs)
+
+
+#: Bound read-only into the sandbox when they exist. `/usr` covers a merged-usr host on
+#: its own; the rest are listed for split-usr distributions, and binding a path that is
+#: already a symlink into /usr is harmless.
+_SYSTEM_PATHS = ("/usr", "/etc", "/lib", "/lib64", "/bin", "/sbin", "/opt")
+
+
+class BwrapExecutor(LocalExecutor):
+    """LocalExecutor with every command wrapped in a bubblewrap sandbox.
+
+    Only `wrap` differs: the compile and the run are identical otherwise, so the two
+    backends cannot drift in how they classify a timeout or a crash.
+    """
+
+    name = "local-bwrap"
+    isolation = "namespace"
+
+    @staticmethod
+    def wrap(argv: list[str], workdir: Path) -> list[str]:
+        cmd = ["bwrap", "--unshare-all", "--die-with-parent", "--new-session"]
+        for path in _SYSTEM_PATHS:
+            if os.path.exists(path):
+                cmd += ["--ro-bind", path, path]
+        cmd += [
+            "--proc", "/proc",
+            "--dev", "/dev",
+            "--tmpfs", "/tmp",
+            # Read-write on purpose: gcc writes `program` here and the run step
+            # executes it. It is a per-request temp directory, discarded after.
+            "--bind", str(workdir), "/work",
+            "--chdir", "/work",
+            "--",
+        ]
+        return cmd + argv
+
+    @classmethod
+    def probe(cls) -> bool:
+        """Run bwrap for real rather than testing for the binary.
+
+        bubblewrap can be installed and still fail: unprivileged user namespaces are
+        restricted by AppArmor on Ubuntu 23.10+ and were off by default on older
+        Debian. Distributions paper over it by shipping bwrap setuid-root, so the
+        only reliable question is whether it works.
+
+        The probe binds the same `_SYSTEM_PATHS` set `wrap()` uses, rather than a
+        smaller hand-picked set, so it exercises the actual sandbox shape and isn't
+        fragile to a distribution's particular symlink layout. A minimal `--ro-bind
+        /usr /usr` plus a `/bin -> usr/bin` symlink looks sufficient on a typical
+        merged-/usr host, but fails on one where `/lib64` is its own top-level
+        symlink (e.g. Arch Linux's `/lib64 -> usr/lib`): the dynamic loader at
+        `/lib64/ld-linux-x86-64.so.2` is then unreachable inside that minimal root,
+        and even `/bin/true` fails to exec -- not because bwrap itself doesn't work,
+        but because the probe's own sandbox was incomplete.
+        """
+        if not super().probe() or shutil.which("bwrap") is None:
+            return False
+        cmd = ["bwrap", "--unshare-all", "--die-with-parent"]
+        for path in _SYSTEM_PATHS:
+            if os.path.exists(path):
+                cmd += ["--ro-bind", path, path]
+        cmd += ["--proc", "/proc", "--dev", "/dev", "--", "/bin/true"]
+        try:
+            done = subprocess.run(cmd, capture_output=True, timeout=10)
+            return done.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False

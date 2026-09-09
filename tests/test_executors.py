@@ -156,3 +156,37 @@ int main(void) {
     assert result.compiled, result.compile_error
     assert result.runs[0].status == "ok"
     assert result.runs[0].exit_code == 0
+
+
+def test_isolation_is_reported_honestly(executor):
+    """A backend must not claim isolation it does not provide -- CLIVE_SANDBOX_FLOOR
+    is enforced against this string and nothing else."""
+    assert executor.isolation in ("container", "namespace", "rlimit")
+
+
+NETWORK = """
+#include <stdio.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <string.h>
+int main(void) {
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s < 0) { printf("nosocket\\n"); return 0; }
+    struct sockaddr_in a;
+    memset(&a, 0, sizeof a);
+    a.sin_family = AF_INET;
+    a.sin_port = htons(80);
+    a.sin_addr.s_addr = inet_addr("1.1.1.1");
+    printf("%s\\n", connect(s, (struct sockaddr *)&a, sizeof a) == 0 ? "open" : "blocked");
+    return 0;
+}
+"""
+
+
+def test_isolated_backends_have_no_network(executor):
+    if executor.isolation == "rlimit":
+        pytest.skip("the bare backend does not claim network isolation")
+    result = executor.run(request_for(NETWORK, [""], run_seconds=8))
+    assert result.compiled, result.compile_error
+    assert result.runs[0].stdout.strip() in ("blocked", "nosocket")
