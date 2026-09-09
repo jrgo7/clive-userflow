@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from clive import config
-from clive.executors.base import Limits
+from clive.executors.base import ExecutorError, Limits
 from clive.executors.local import LocalExecutor
 
 
@@ -37,6 +38,12 @@ class ContainerExecutor(LocalExecutor):
     def wrap_with(
         cls, argv: list[str], workdir: Path, limits: Limits, is_compile: bool,
     ) -> list[str]:
+        if cls.runtime is None:
+            raise ExecutorError(
+                "ContainerExecutor has no probed runtime. Call probe() first (or go "
+                "through get_executor(), which always does) rather than constructing "
+                "this class directly."
+            )
         cmd = [
             cls.runtime, "run", "--rm",
             # Without this, podman leaves the container's stdin closed (EOF)
@@ -60,17 +67,23 @@ class ContainerExecutor(LocalExecutor):
             # compile error on correct code". LocalExecutor/BwrapExecutor keep this by
             # passing preexec=None to the compile spawn; the container-flag
             # equivalent is simply not passing --memory/--pids-limit at all.
-            cmd += ["--timeout", str(limits.compile_seconds + 5)]
+            timeout_seconds = limits.compile_seconds + 5
         else:
-            cmd += [
-                "--memory", f"{limits.memory_mb}m",
-                "--pids-limit", str(limits.pids),
-                # The container stops itself if the client is killed, so a timeout
-                # does not leave a container running after the request is gone.
-                "--timeout", str(limits.run_seconds + 5),
-            ]
+            cmd += ["--memory", f"{limits.memory_mb}m", "--pids-limit", str(limits.pids)]
+            timeout_seconds = limits.run_seconds + 5
         cmd.append(config.EXECUTOR_IMAGE)
-        return cmd + argv
+        # A CLI --timeout flag would be the obvious way to bound this, and podman has
+        # one -- but docker's `run` does not ("unknown flag: --timeout", exit 125),
+        # verified empirically. Passing it unconditionally made every compile fail on
+        # a docker-only host, on the strongest isolation tier, reported to the student
+        # as a compile error on correct code. Wrapping the in-container command with
+        # coreutils' own `timeout` instead needs no runtime-specific flag at all: gcc:14
+        # ships coreutils, so this is identical on both runtimes and self-enforcing --
+        # it runs and kills inside the container's own PID namespace, so the container
+        # still stops itself even if the client process (this Python process, or the
+        # podman/docker CLI it launched) is killed before the run's own timeout fires.
+        # `-k 1` sends TERM, then KILL a second later if TERM did not finish the job.
+        return cmd + ["timeout", "-k", "1", str(timeout_seconds)] + argv
 
     def execute(self, request):
         # `wrap` has no limits argument, so bind them for this call. The base class
@@ -91,19 +104,36 @@ class ContainerExecutor(LocalExecutor):
 
     @classmethod
     def probe(cls) -> bool:
+        """Run a real container through `wrap_with` itself, not a hand-rebuilt argv.
+
+        Same principle as `BwrapExecutor.probe`'s own docstring, and guarding against
+        exactly the class of bug it names: installed but broken. Checking `image
+        exists`/`image inspect` alone only proves podman or docker can see the image --
+        that passed cleanly on a docker-only host running gcc:14 while every real
+        compile then failed with exit 125, because `wrap_with` was passing podman's
+        `--timeout` flag to docker too. Running `wrap_with`'s own output -- the literal
+        command a real compile or run will use, not a second list that merely claims to
+        agree with it -- is what would have caught that, and is what makes the same
+        class of bug structurally hard to reintroduce: any future flag `wrap_with`
+        grows either works on both runtimes or fails right here, before a single
+        student's compile does.
+
+        `cls.runtime` is set before calling `wrap_with` (which requires it) and
+        unset again if this runtime does not actually work, so a probe that tries
+        podman then docker never leaves a failed runtime's name behind for the next
+        one to trip over.
+        """
         for runtime in ("podman", "docker"):
             if shutil.which(runtime) is None:
                 continue
+            cls.runtime = runtime
             try:
-                done = subprocess.run(
-                    [runtime, "image", "exists", config.EXECUTOR_IMAGE]
-                    if runtime == "podman"
-                    else [runtime, "image", "inspect", config.EXECUTOR_IMAGE],
-                    capture_output=True, timeout=20,
-                )
+                with tempfile.TemporaryDirectory(prefix="clive-probe-") as tmp:
+                    cmd = cls.wrap_with(["/bin/true"], Path(tmp), Limits(), is_compile=False)
+                    done = subprocess.run(cmd, capture_output=True, timeout=30)
+                if done.returncode == 0:
+                    return True
             except (OSError, subprocess.SubprocessError):
-                continue
-            if done.returncode == 0:
-                cls.runtime = runtime
-                return True
+                pass
+            cls.runtime = None
         return False
