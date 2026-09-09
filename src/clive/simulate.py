@@ -132,6 +132,49 @@ def run(
         yield {"type": "phase_start", "phase": pid, "label": label,
                "index": index, "total": len(phases)}
 
+        if phase.get("gate") == "tests":
+            # This phase's pass/fail belongs to a compiler, not a judge (`gate:
+            # tests`) -- and its own criteria are all advisory by that same design,
+            # so `blocking` computes to [] by construction and judging.judge() would
+            # always report a pass here, whether or not the code the persona wrote
+            # even compiles. Simulate has no compiler in this loop (that is
+            # `clive.grade.grade`'s job, driven by a real submission, not a simulated
+            # one), so rather than silently reporting a pass this phase cannot
+            # verify, it writes the persona's artifact -- so the code it produced is
+            # still visible in the transcript -- and explicitly skips grading it,
+            # spending one call instead of the two or three a judged phase costs.
+            yield {"type": "working", "phase": pid, "attempt": 1, "what": "writing"}
+            try:
+                wrote = writing.write(persona, phase, problem, 1, prior, None, persona_doc, None)
+            except JudgeError as exc:
+                yield {"type": "error", "phase": pid, "attempt": 1, "fatal": True,
+                       "message": f"The student could not write: {exc}"}
+                return
+            spend(wrote["usage"])
+            artifact = wrote["artifact"]
+            yield {
+                "type": "artifact", "phase": pid, "attempt": 1,
+                "fields": [
+                    {"id": f["id"], "label": f.get("label") or f["id"],
+                     "value": artifact.get(f["id"], "")}
+                    for f in phase.get("artifact_fields") or []
+                ],
+            }
+            yield {
+                "type": "gate_skipped", "phase": pid, "label": label,
+                "message": f"{label} is gated by the compiler (gate: tests), not by "
+                           "the judge. Simulate does not compile or run code, so this "
+                           "phase's pass or fail is not determined here -- grade the "
+                           "artifact yourself (clive.grade.grade, or Run/Submit on the "
+                           "real /student page) to see whether it actually works.",
+            }
+            summary.append({"phase": pid, "label": label, "passed": None,
+                             "attempts": 1, "skipped": True})
+            yield {"type": "phase_done", "phase": pid, "label": label,
+                   "passed": None, "attempts": 1, "skipped": True}
+            done[pid] = artifact
+            continue
+
         last_artifact: dict = {}
 
         while attempt <= attempts_allowed:
@@ -253,5 +296,16 @@ def run(
 
         done[pid] = artifact
 
+    skipped = [s["label"] for s in summary if s.get("skipped")]
+    message = "Every phase passed."
+    if skipped:
+        # Honest, not a claim of verified success: see the gate_skipped note above.
+        message += (
+            " (" + ", ".join(skipped) + " "
+            + ("is" if len(skipped) == 1 else "are")
+            + " compiler-gated -- Simulate does not execute code, so "
+            + ("it was" if len(skipped) == 1 else "they were")
+            + " skipped rather than judged.)"
+        )
     yield {"type": "done", "completed": True, "phases": summary, "usage": totals,
-           "message": "Every phase passed."}
+           "message": message}

@@ -202,6 +202,74 @@ def test_advisory_failure_alone_does_not_block(stub):
     assert not [e for e in evs if e["type"] == "nudge"]
 
 
+def test_a_tests_gated_phase_is_skipped_not_silently_passed(stub):
+    """The finding this guards: Implement's criteria are all advisory, so
+    judging.judge() would always report a pass regardless of whether the code
+    compiles. `simulate.run` must not judge a `gate: tests` phase at all -- it
+    should write the artifact (so the code is visible) and skip grading explicitly.
+    """
+    p = stub()
+    evs = list(simulate.run("minimalist", "grade_average", max_attempts=2, phase_ids=["implement"]))
+    kinds = [e["type"] for e in evs]
+
+    assert kinds.count("artifact") == 1
+    assert "verdicts" not in kinds
+    assert "nudge" not in kinds
+    assert "gate_skipped" in kinds
+
+    skip = next(e for e in evs if e["type"] == "gate_skipped")
+    assert skip["phase"] == "implement"
+    assert "compiler" in skip["message"].lower()
+
+    phase_done = next(e for e in evs if e["type"] == "phase_done")
+    assert phase_done["skipped"] is True
+    assert phase_done["passed"] is None
+
+    done = evs[-1]
+    assert done["type"] == "done" and done["completed"] is True
+    assert done["phases"] == [{"phase": "implement", "label": "Implement",
+                               "passed": None, "attempts": 1, "skipped": True}]
+    assert "compiler-gated" in done["message"]
+
+    # Only the write call was spent -- no judge call, no wasted nudge call either.
+    names = [n for (n, _) in p.seen]
+    assert names == ["StudentArtifact"]
+    assert p.judged == 0
+
+
+def test_a_tests_gated_phase_still_lets_a_write_failure_stop_the_run(stub, monkeypatch):
+    class BoomProvider:
+        name, api_key_env, default_model = "stub", "STUB_KEY", "stub-1"
+        model_choices = ["stub-1"]
+
+        def has_api_key(self):
+            return True
+
+        def judge_json(self, **kw):
+            raise judging.JudgeError("provider down")
+
+    monkeypatch.setattr(writing, "get_provider", lambda *a, **k: BoomProvider())
+    evs = list(simulate.run("minimalist", "grade_average", max_attempts=1, phase_ids=["implement"]))
+    assert evs[-1]["type"] == "error"
+    assert evs[-1]["fatal"] is True
+    assert not [e for e in evs if e["type"] in ("gate_skipped", "done")]
+
+
+def test_a_tests_gated_phase_does_not_block_a_normal_phase_after_it(stub):
+    """`case_design` is judged normally; `implement` (compiler-gated) still runs and
+    is skipped rather than either blocking the run or being silently marked passed."""
+    p = stub()
+    evs = list(simulate.run("minimalist", "grade_average", max_attempts=1,
+                            phase_ids=["case_design", "implement"]))
+    kinds = [e["type"] for e in evs]
+    assert kinds.count("phase_start") == 2
+    assert kinds.count("verdicts") == 1          # case_design only
+    assert kinds.count("gate_skipped") == 1       # implement only
+    assert evs[-1]["completed"] is True
+    labels = [p["label"] for p in evs[-1]["phases"]]
+    assert labels == ["Cases", "Implement"]
+
+
 def test_an_unpassed_phase_stops_the_run(stub):
     """The gating rule, not a shortcut: a real student never reaches the next phase."""
     stub(fail={"novel_wording"})
