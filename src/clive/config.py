@@ -48,7 +48,10 @@ EXECUTOR_IMAGE = os.environ.get(
 #: The weakest isolation this host will accept: "container", "namespace", or "rlimit".
 #: Serving several participants from one box, set this to "namespace" or better -- the
 #: default is permissive because the common case is one author on their own machine.
-SANDBOX_FLOOR = os.environ.get("CLIVE_SANDBOX_FLOOR", "rlimit").strip().strip("'\"")
+#: Lowercased here so `CLIVE_SANDBOX_FLOOR=Container` and `=container` are the same
+#: setting rather than one of them silently failing to match `ISOLATION_RANK` in
+#: `clive.executors.get_executor` and falling open to the weakest floor.
+SANDBOX_FLOOR = os.environ.get("CLIVE_SANDBOX_FLOOR", "rlimit").strip().strip("'\"").lower()
 
 #: Compiles running at once. ThreadingHTTPServer spawns a thread per request and would
 #: otherwise start an unbounded number of them.

@@ -54,7 +54,22 @@ def available_executors() -> list[type[Executor]]:
 
 
 def get_executor() -> Executor:
-    floor = ISOLATION_RANK.get(config.SANDBOX_FLOOR, 0)
+    # `.get(..., 0)` used to be the rule here, which fails open: an unrecognised or
+    # miscapitalized CLIVE_SANDBOX_FLOOR (a typo, or "Container" with a capital C)
+    # silently resolved to 0 -- the weakest floor -- rather than refusing to run, on
+    # the one setting that exists to refuse a weak sandbox on a multi-participant
+    # host. `get_provider()` fails loudly on an unknown CLIVE_PROVIDER; this now does
+    # the same for CLIVE_SANDBOX_FLOOR. (config.SANDBOX_FLOOR is already
+    # lowercased/stripped at read time, so this only ever rejects a genuinely unknown
+    # value, not a casing difference.)
+    floor_name = config.SANDBOX_FLOOR
+    try:
+        floor = ISOLATION_RANK[floor_name]
+    except KeyError:
+        raise ExecutorError(
+            f"Unknown CLIVE_SANDBOX_FLOOR {floor_name!r}. Set it to one of: "
+            f"{', '.join(ISOLATION_RANK)}."
+        ) from None
 
     if config.EXECUTOR:
         chosen = next((c for c in REGISTRY if c.name == config.EXECUTOR), None)
