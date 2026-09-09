@@ -41,6 +41,22 @@ GATES = ("gating", "advisory")
 #: attempt too long -- not to advance them past a phase they never satisfied.
 DEFAULT_GATE = "gating"
 
+#: What decides whether a phase passes. `criteria` is the original behaviour: the judge
+#: rules on every criterion and the gating ones hold the student. `tests` hands the gate
+#: to a compiler -- the phase passes when every test case passes, and its criteria are
+#: advisory review rather than a barrier. (See docs/superpowers/specs/2026-09-07-*.md)
+PHASE_GATES = ("criteria", "tests")
+
+#: A phase that does not say is judged, which is what every phase written before this
+#: key existed meant.
+DEFAULT_PHASE_GATE = "criteria"
+
+#: How an artifact field is edited. `text` is the textarea every field has always been;
+#: `code` mounts an editor. Anything but the renderer should treat them identically.
+FIELD_KINDS = ("text", "code")
+
+DEFAULT_FIELD_KIND = "text"
+
 
 class ContentError(ValueError):
     """Authored content is missing or malformed. Carries a message meant for the user."""
@@ -184,6 +200,9 @@ def load_phase(phase: str) -> dict:
     model.setdefault("id", get_provider().default_model)
     model.setdefault("effort", "medium")
     model.setdefault("max_output_tokens", 4000)
+    data.setdefault("gate", DEFAULT_PHASE_GATE)
+    for field in data["artifact_fields"]:
+        field.setdefault("kind", DEFAULT_FIELD_KIND)
     return data
 
 
@@ -204,8 +223,22 @@ def save_phase(phase: str, data: dict) -> dict:
     if not str(merged.get("changelog", "")).strip() and str(existing.get("changelog", "")).strip():
         merged["changelog"] = existing["changelog"]
 
+    gate = str(merged.get("gate") or DEFAULT_PHASE_GATE).strip()
+    if gate not in PHASE_GATES:
+        raise ContentError(
+            f"Phase {phase!r} has gate {gate!r}; expected one of {', '.join(PHASE_GATES)}."
+        )
+    merged["gate"] = gate
+
     for field in merged.get("artifact_fields") or []:
         check_slug(field.get("id", ""), "artifact field id")
+        kind = str(field.get("kind") or DEFAULT_FIELD_KIND).strip()
+        if kind not in FIELD_KINDS:
+            raise ContentError(
+                f"Artifact field {field.get('id')!r} has kind {kind!r}; "
+                f"expected one of {', '.join(FIELD_KINDS)}."
+            )
+        field["kind"] = kind
 
     if not str(merged.get("system_prompt", "")).strip():
         raise ContentError("system_prompt cannot be empty.")
@@ -226,6 +259,7 @@ def save_phase(phase: str, data: dict) -> dict:
         "phase",
         "label",
         "order",
+        "gate",
         "created",
         "changelog",
         "model",
