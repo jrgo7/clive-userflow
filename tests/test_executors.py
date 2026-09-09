@@ -80,10 +80,55 @@ int main(void) { for (long i = 0; i < 5000000L; i++) printf("flood\\n"); return 
     result = executor.run(request_for(source, ["1"], output_bytes=4096, run_seconds=10))
     assert result.compiled, result.compile_error
     assert len(result.runs[0].stdout) <= 4096
-    assert result.runs[0].status in ("output_truncated", "timeout")
+    assert result.runs[0].status == "output_truncated"
+
+
+def test_unbounded_flood_is_capped_promptly_not_after_the_full_timeout(executor):
+    """Regression test: a program that never stops producing output must be killed as
+    soon as `output_bytes` is exceeded, not drained until it hits EOF (impossible
+    here) or the full `run_seconds` wall clock -- the previous implementation
+    buffered the flood into memory via a blocking `communicate()` and only checked
+    `output_bytes` afterward, so it always paid the full timeout (and, decoding
+    everything it had buffered by then, sometimes noticeably more).
+    """
+    source = """
+#include <stdio.h>
+int main(void) { for (;;) printf("flood\\n"); return 0; }
+"""
+    result = executor.run(request_for(source, ["1"], output_bytes=4096, run_seconds=8))
+    assert result.compiled, result.compile_error
+    run = result.runs[0]
+    assert run.status == "output_truncated"
+    assert len(run.stdout) <= 4096
+    # Generous relative to the ~20ms actually observed -- the point is "nowhere near
+    # the 8000ms timeout", not a tight latency bound this test would flake on.
+    assert run.duration_ms < 2000
 
 
 def test_a_crash_is_a_runtime_error_not_an_exception(executor):
     source = "int main(void) { int *p = 0; *p = 1; return 0; }"
     result = executor.run(request_for(source, ["1"]))
     assert result.runs[0].status == "runtime_error"
+
+
+def test_fork_succeeds_under_default_pids_limit(executor):
+    """A correct fork() must not fail just because the host already has other,
+    unrelated processes and threads running under the same user -- `limits.pids` is
+    a budget above ambient load, not an absolute ceiling on it.
+    """
+    source = """
+#include <unistd.h>
+#include <sys/wait.h>
+int main(void) {
+    pid_t pid = fork();
+    if (pid < 0) { return 1; }
+    if (pid == 0) { _exit(0); }
+    int status;
+    waitpid(pid, &status, 0);
+    return 0;
+}
+"""
+    result = executor.run(request_for(source, ["1"]))
+    assert result.compiled, result.compile_error
+    assert result.runs[0].status == "ok"
+    assert result.runs[0].exit_code == 0
