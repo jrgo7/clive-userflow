@@ -79,9 +79,9 @@ def _ambient_task_count() -> int:
 def _rlimits(limits: Limits, nproc_ceiling: int):
     """Applied in the child, between fork and exec. Run step only.
 
-    `nproc_ceiling` is `limits.pids` plus a fresh ambient-task count taken in the
-    parent right before this runs, so `limits.pids` means "budget above whatever the
-    host is already doing" rather than an absolute cap -- see `_ambient_task_count`.
+    `nproc_ceiling` is `limits.pids` plus an ambient-task count taken in the parent
+    once for the request, so `limits.pids` means "budget above whatever the host is
+    already doing" rather than an absolute cap -- see `_ambient_task_count`.
     """
 
     def apply():
@@ -133,12 +133,18 @@ def _spawn_capped(
     this never calls `communicate()`: that drains a child's pipes to completion (EOF
     or timeout) fully into memory before anyone gets a chance to truncate, so a
     flooding program was bounded in wall time but not in the bytes this process
-    buffered while draining it. Instead this reads both streams through a
+    buffered while draining it. Instead this reads both streams through a single
     `select.select` loop and kills the process group the instant either stream's
-    accumulated size passes `output_bytes`. Selecting on both fds together, rather
-    than reading one to completion before the other, is what avoids the classic
-    two-pipe deadlock -- a child that fills stdout while this process is blocked
-    reading only stderr, or vice versa.
+    accumulated size passes `output_bytes`.
+
+    Writing stdin happens inside that same loop rather than as a separate blocking
+    step beforehand: a child that never reads stdin (it does not call `scanf`, say)
+    while flooding its own stdout would otherwise deadlock a blocking write against
+    the child's own full, undrained pipe -- and since that write sits before the read
+    loop even starts, `run_seconds` (enforced only inside the loop) would never fire
+    either. Stdin's fd is made non-blocking and folded into `select`'s writable set
+    alongside the two readable ones, so nothing here can block outside the one loop
+    that already knows how to enforce the deadline and the byte cap.
     """
     try:
         proc = subprocess.Popen(
@@ -150,38 +156,56 @@ def _spawn_capped(
         raise ExecutorError(f"Could not start {argv[0]!r}: {exc}") from None
 
     try:
-        # Stdins in this codebase are short and a program reads them eagerly (or not
-        # at all), so this write never contends with the read loop below.
-        if stdin_text is not None:
-            try:
-                proc.stdin.write(stdin_text.encode("utf-8", errors="replace"))
-            except (BrokenPipeError, OSError):
-                pass
-        try:
-            proc.stdin.close()
-        except OSError:
-            pass
-
         stdout_fd, stderr_fd = proc.stdout.fileno(), proc.stderr.fileno()
         chunks: dict[int, list[bytes]] = {stdout_fd: [], stderr_fd: []}
         sizes = {stdout_fd: 0, stderr_fd: 0}
-        open_fds = {stdout_fd, stderr_fd}
+        readable = {stdout_fd, stderr_fd}
         timed_out = False
         output_capped = False
         deadline = time.monotonic() + timeout
 
-        while open_fds:
+        # None until there is unwritten stdin; cleared (and the pipe closed) once
+        # everything has been written, or the child turns out never to read it.
+        stdin_fd = None
+        pending_stdin = b"" if stdin_text is None else stdin_text.encode("utf-8", errors="replace")
+        if pending_stdin:
+            stdin_fd = proc.stdin.fileno()
+            os.set_blocking(stdin_fd, False)
+        else:
+            try:
+                proc.stdin.close()
+            except OSError:
+                pass
+
+        while readable or stdin_fd is not None:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 timed_out = True
                 break
-            ready, _, _ = select.select(list(open_fds), [], [], remaining)
-            if not ready:
+            writable = [stdin_fd] if stdin_fd is not None else []
+            ready_r, ready_w, _ = select.select(list(readable), writable, [], remaining)
+            if not ready_r and not ready_w:
                 continue  # select's own timeout elapsed; the top of the loop marks it
-            for fd in ready:
+
+            if stdin_fd is not None and stdin_fd in ready_w:
+                try:
+                    written = os.write(stdin_fd, pending_stdin[:65536])
+                    pending_stdin = pending_stdin[written:]
+                except (BrokenPipeError, OSError):
+                    # The child exited, or will never read the rest -- give up on it
+                    # rather than spin re-offering a fd that keeps coming back ready.
+                    pending_stdin = b""
+                if not pending_stdin:
+                    try:
+                        proc.stdin.close()
+                    except OSError:
+                        pass
+                    stdin_fd = None
+
+            for fd in ready_r:
                 chunk = os.read(fd, 65536)
                 if not chunk:
-                    open_fds.discard(fd)
+                    readable.discard(fd)
                     continue
                 chunks[fd].append(chunk)
                 sizes[fd] += len(chunk)
@@ -206,7 +230,7 @@ def _spawn_capped(
         stderr = b"".join(chunks[stderr_fd]).decode("utf-8", errors="replace")
         return exit_code, stdout, stderr, timed_out, output_capped
     finally:
-        for stream in (proc.stdout, proc.stderr):
+        for stream in (proc.stdin, proc.stdout, proc.stderr):
             try:
                 stream.close()
             except OSError:
@@ -247,13 +271,16 @@ class LocalExecutor(Executor):
             if code != 0:
                 return ExecutionResult(False, cerr, "", [])
 
+            # Measured once per request, immediately before the first run, rather than
+            # once per stdin: ambient load does shift over time, but not meaningfully
+            # within the few seconds one request's runs take, and re-walking all of
+            # /proc before every single stdin is wasted work for a request with many
+            # test cases.
+            nproc_ceiling = _ambient_task_count() + limits.pids
+
             runs = []
             for stdin_text in request.stdins:
                 started = time.monotonic()
-                # Measured fresh for each run, immediately before Popen: ambient load
-                # is a moving target, and stale numbers from earlier in this request
-                # would drift as other processes on the host come and go.
-                nproc_ceiling = _ambient_task_count() + limits.pids
                 rc, out, err, ran_out, output_capped = _spawn_capped(
                     self.wrap(request.run_argv, workdir), workdir,
                     stdin_text, limits.run_seconds,

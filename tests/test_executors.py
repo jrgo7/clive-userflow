@@ -105,6 +105,30 @@ int main(void) { for (;;) printf("flood\\n"); return 0; }
     assert run.duration_ms < 2000
 
 
+def test_large_stdin_against_a_non_reading_flooding_child_does_not_deadlock(executor):
+    """Regression test: writing stdin must never be a blocking step that happens
+    before the read loop starts. A child that floods stdout while never reading
+    stdin at all (no `scanf`) can leave the parent's stdin pipe full after ~64 KiB --
+    if that write sits outside the loop that enforces `run_seconds`, the parent
+    blocks on it forever, deadlocked against the child's own full, undrained stdout
+    pipe, and `run_seconds` never gets a chance to fire.
+    """
+    big_stdin = "x" * (200 * 1024)  # comfortably over a 64 KiB pipe buffer
+    source = """
+#include <stdio.h>
+int main(void) { for (;;) printf("flood\\n"); return 0; }
+"""
+    result = executor.run(request_for(source, [big_stdin], output_bytes=4096, run_seconds=3))
+    assert result.compiled, result.compile_error
+    run = result.runs[0]
+    assert run.status == "output_truncated"
+    assert len(run.stdout) <= 4096
+    # The real point of this test is that it returns at all -- a deadlocked
+    # implementation never reaches this line. Generous relative to the low tens of
+    # ms actually observed, but well inside run_seconds=3.
+    assert run.duration_ms < 2000
+
+
 def test_a_crash_is_a_runtime_error_not_an_exception(executor):
     source = "int main(void) { int *p = 0; *p = 1; return 0; }"
     result = executor.run(request_for(source, ["1"]))
