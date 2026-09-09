@@ -246,6 +246,15 @@ class LocalExecutor(Executor):
     def wrap(argv: list[str], workdir: Path) -> list[str]:
         return argv
 
+    @staticmethod
+    def preexec_for_run(limits: Limits, nproc_ceiling: int):
+        """Applied in the child between fork and exec, run step only. Overridden to
+        None by a backend whose limits are enforced somewhere other than this host's
+        process table (a container's own --memory/--pids-limit flags, say) -- applying
+        an RLIMIT_AS meant for the student's program to that backend's client process
+        instead would cap the client, not the program."""
+        return _rlimits(limits, nproc_ceiling)
+
     @classmethod
     def probe(cls) -> bool:
         return shutil.which("gcc") is not None
@@ -284,7 +293,7 @@ class LocalExecutor(Executor):
                 rc, out, err, ran_out, output_capped = _spawn_capped(
                     self.wrap(request.run_argv, workdir), workdir,
                     stdin_text, limits.run_seconds,
-                    _rlimits(limits, nproc_ceiling), limits.output_bytes,
+                    self.preexec_for_run(limits, nproc_ceiling), limits.output_bytes,
                 )
                 duration = int((time.monotonic() - started) * 1000)
 

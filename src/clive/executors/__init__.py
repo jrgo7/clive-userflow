@@ -18,6 +18,7 @@ from clive.executors.base import (
     Limits,
     RunOutcome,
 )
+from clive.executors.container import ContainerExecutor
 from clive.executors.local import BwrapExecutor, LocalExecutor
 
 __all__ = [
@@ -26,7 +27,7 @@ __all__ = [
 ]
 
 #: Strongest first. `get_executor` takes the first one that probes clean.
-REGISTRY: list[type[Executor]] = [BwrapExecutor, LocalExecutor]
+REGISTRY: list[type[Executor]] = [ContainerExecutor, BwrapExecutor, LocalExecutor]
 
 #: Higher is stronger. CLIVE_SANDBOX_FLOOR names the weakest acceptable value.
 ISOLATION_RANK = {"rlimit": 0, "namespace": 1, "container": 2}
