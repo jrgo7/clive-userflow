@@ -14,7 +14,7 @@
 
 id: criteria.case_design
 phase: case_design
-version: 2
+version: 3
 
 criteria:
   - id: has_normal_case
@@ -51,12 +51,31 @@ criteria:
     text: Every stated expected output is actually correct for its stated input.
     gate: gating
     guidance: |
-      Compute each case yourself against the problem statement before judging.
-      PASS only if every expected output the artifact states is right, including its
-      format (decimal places, rounding, units, casing) where the statement fixes one.
-      FAIL if any case is wrong, and quote the wrong case as evidence.
+      Compute each case yourself against the problem statement before judging. Judge the
+      value the student is claiming, not how they wrote it down -- "the output will be
+      63.33" claims the same value as a bare "63.33" under an Output heading, and is not
+      wrong for being a sentence instead of a table cell.
+      PASS if every value the artifact claims is the right one for its input.
+      FAIL only if a claimed value is actually wrong -- a different number, a missing
+      case, a sign error. Quote the wrong case as evidence.
+      Precision, rounding, units, and casing are judged separately by
+      `output_format_matches_statement` and must never fail this criterion.
 
   # ---- Advisory: extra understanding, never blocking -------------------------
+
+  - id: output_format_matches_statement
+    text: The stated output matches the exact format the problem statement fixes.
+    gate: advisory
+    guidance: |
+      PASS if, for every case where the problem statement fixes a format -- decimal
+      places, rounding, units, casing -- the stated value matches it exactly: "63.33",
+      not "63.3", if the statement asks for two decimal places. If the statement fixes
+      no format, PASS.
+      FAIL if a case's value is right but its precision, rounding, units, or casing
+      drifts from what the statement fixes.
+      This is never about how the student phrases a case -- a full sentence, a bare
+      number, a label. Do not fail a case for being written in prose; fail it only for
+      stating the wrong number of decimal places, wrong units, or wrong rounding.
 
   - id: cases_are_distinct
     text: Each case tests something the other cases do not.
