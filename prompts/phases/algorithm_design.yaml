@@ -1,10 +1,18 @@
 id: phase.algorithm_design
-version: 3
+version: 4
 phase: algorithm_design
 label: Design
 order: 3
 created: 2026-08-20
 changelog: >
+  v4: Judge model moved from `deepseek-v4-pro` back to `deepseek-chat` (flash) to
+  cut cost -- every judged phase now runs on flash. `max_output_tokens` lowered
+  8000 -> 4000 to match `problem_definition` and `case_design`: flash runs no
+  reasoning pass, so the 8-criterion verdict list sits well inside 4000. The
+  trade-off is recorded in docs/artifact-fields-pilot-results.md -- flash is a
+  weaker arithmetic checker, which on this phase mainly exposes the advisory
+  `covers_own_edge_cases` (tracing the student's cases through their own steps).
+
   v3: Judge model moved from `claude-opus-5` to `deepseek-v4-pro`, so this phase
   runs off `DEEPSEEK_API_KEY` like `problem_definition` and `case_design` rather
   than needing an Anthropic key. `judge()` now routes the provider from
@@ -27,10 +35,10 @@ changelog: >
   this phase judges whether the plan is followable, not whether it is optimal.
 
 model:
-  id: deepseek-v4-pro
+  id: deepseek-chat
   effort: medium
   thinking: adaptive
-  max_output_tokens: 8000
+  max_output_tokens: 4000
   response_format: json_schema
   schema: base/output_schema.json
 

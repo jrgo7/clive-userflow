@@ -23,23 +23,29 @@
 #              of the student's code, because that is the artifact being judged.
 
 id: phase.implement
-version: 1
+version: 2
 phase: implement
 label: Implement
 order: 4
 gate: tests
 created: 2026-09-07
 changelog: >
+  v2: Judge model moved from `deepseek-v4-pro` to `deepseek-chat` (flash) to cut
+  cost, matching every other phase. `max_output_tokens` lowered 8000 -> 4000. The
+  criteria here are all advisory and the compiler has already settled correctness,
+  so a weaker judge only softens the design-conformance notes; nothing it says can
+  gate the student.
+
   v1: Initial definition. The fourth PCDIT step, gated by the test cases and advised by
   a judge that reads the code against the student's own Problem, Cases and Design. Only
   runs once every test passes, so it never comments on correctness -- the compiler has
   already settled that.
 
 model:
-  id: deepseek-v4-pro
+  id: deepseek-chat
   effort: medium
   thinking: adaptive
-  max_output_tokens: 8000
+  max_output_tokens: 4000
   response_format: json_schema
   schema: base/output_schema.json
 

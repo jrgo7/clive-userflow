@@ -327,7 +327,7 @@ function editorHost(f, st) {
   queueMicrotask(() => CLiveEditor.mount(host, {
     value: st.artifact[f.id] || "",
     language: f.language || "c",
-    onChange: (v) => { st.artifact[f.id] = v; save(); },
+    onChange: (v) => { st.artifact[f.id] = v; save(); syncGate(); },
   }));
   return host;
 }
@@ -438,7 +438,7 @@ function renderForm() {
     }
     const ta = h("textarea", {
       rows: f.rows || 4, "aria-label": f.label || f.id,
-      oninput: (e) => { st.artifact[f.id] = e.target.value; save(); },
+      oninput: (e) => { st.artifact[f.id] = e.target.value; save(); syncGate(); },
     });
     ta.value = st.artifact[f.id] || "";
     fields.append(h("div", { class: "fld" }, [
@@ -453,7 +453,8 @@ function renderForm() {
   const acts = h("div", { class: "actions" }, [
     h("button", { class: "btn ghost", type: "button", disabled: !!S.busy || !S.boot.has_api_key,
       text: S.busy === "hint" ? "Thinking…" : "I'm stuck — get a hint", onclick: askHint }),
-    h("button", { class: "btn", type: "button", disabled: !!S.busy || empty || !S.boot.has_api_key,
+    h("button", { class: "btn", type: "button", "data-gate": S.boot.has_api_key ? "open" : "locked",
+      disabled: !!S.busy || empty || !S.boot.has_api_key,
       text: S.busy === "submit" ? "Checking…" : "Submit for checking", onclick: submit }),
   ]);
   if (st.history.length) {
@@ -463,7 +464,7 @@ function renderForm() {
   if (isCodePhase()) {
     const ex = S.boot.executor || {};
     acts.prepend(h("button", {
-      class: "btn ghost", type: "button",
+      class: "btn ghost", type: "button", "data-gate": ex.available ? "open" : "locked",
       disabled: !!S.busy || empty || !ex.available,
       text: S.busy === "run" ? "Running…" : "Run",
       title: ex.available ? "Check against the examples you were given. Costs nothing."
@@ -646,6 +647,20 @@ function renderStage() {
   }
 
   stage.replaceChildren(...out);
+}
+
+/* Submit and Run stay disabled while every field is blank, so their state has to
+   follow what the student types. A full render() on each keystroke would tear down
+   the field being typed into and lose the cursor, so the input handlers call this
+   instead: it recomputes only the buttons whose disabled state depends on the text.
+   `data-gate="locked"` marks a button held off for another reason (no API key, no
+   compiler) that typing cannot clear. */
+function syncGate() {
+  const st = cur(), p = phase();
+  const blank = (p.artifact_fields || []).every((f) => !(st.artifact[f.id] || "").trim());
+  for (const btn of document.querySelectorAll("#stage button[data-gate]")) {
+    btn.disabled = !!S.busy || blank || btn.dataset.gate === "locked";
+  }
 }
 
 function render() { renderTrack(); renderStage(); }
