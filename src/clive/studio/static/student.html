@@ -536,6 +536,13 @@ function renderLedger(r) {
         what.append(h("div", { class: "norule",
           text: "This quote is not in what you wrote — worth reading the verdict sceptically." }));
       }
+    } else if (!met) {
+      // No quote means the judge found nothing to point at, not that it found nothing
+      // wrong: for a criterion like "a constraint is stated", the failure is silence,
+      // and silence has no line to highlight. Saying so explicitly beats a criterion
+      // that just sits there with nothing under it and no way to tell why.
+      what.append(h("div", { class: "norule",
+        text: "Nothing you wrote addresses this yet — there's no line to point to because the gap is something unsaid, not something wrong." }));
     }
     card.append(h("div", { class: "row" }, [h("span", { class: `badge ${badge[0]}`, text: badge[1] }), what]));
   }

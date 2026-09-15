@@ -1,10 +1,11 @@
 id: phase.case_design
-version: 2
+version: 3
 phase: case_design
 label: Cases
 order: 2
 created: 2026-08-20
 changelog: |
+  v3: STUDENT ARTIFACT now renders a blank field as truly empty instead of the literal string "(not provided)", which the judge could otherwise quote back as `evidence` for a criterion the student left blank. See phase.problem_definition v5 for the full rationale -- the same template pattern, the same fix.
   v2: Added `task_description` (student-facing instructions, shown at the top of a Sandbox session) and an optional EARLIER PHASES block driven by `prior_artifacts`. The block is guarded by `{% if prior_artifacts %}`, so a caller that passes nothing renders exactly what v1 rendered. This phase gains the most from carry-forward: the cases a student designs are only judgeable against the inputs and constraints they claimed in Problem, and without it the judge has to re-derive them from the statement. One system-prompt rule covers the risk it introduces — prior-phase work is this student's own writing, so it must be context and never evidence.
   v1: Initial definition. The "C" of PCDIT — the student works concrete examples by hand before an algorithm exists. The judging contract is inherited from phase.problem_definition, with one addition specific to this phase: the judge must compute each case itself before ruling on correctness, because a plausible but wrong expected output is the failure this phase exists to catch.
 model:
@@ -99,7 +100,7 @@ user_template: |
   {% for f in artifact_fields %}
 
   {{ f.label }}:
-  {{ artifact[f.id] | default("(not provided)", true) }}
+  {{ artifact[f.id] | default("", true) }}
   {% endfor %}
 
   CRITERIA TO JUDGE

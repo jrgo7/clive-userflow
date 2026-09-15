@@ -19,12 +19,13 @@
 #              Sandbox carry-forward toggle). With it absent the block vanishes
 #              and the prompt is byte-identical to v3.
 id: phase.problem_definition
-version: 4
+version: 5
 phase: problem_definition
 label: Problem
 order: 1
 created: 2026-08-18
 changelog: |
+  v5: STUDENT ARTIFACT now renders a blank field as truly empty instead of the literal string "(not provided)". That string was sitting in the prompt looking like real content, and the judge would sometimes quote it back as `evidence` for a criterion the student had simply left blank -- caught by the evidence audit as not found in the artifact (correctly, since it is not student writing), but shown to the student as a quoted, flagged-suspicious blockquote instead of the plain "you didn't address this" the system prompt already asks the judge to report via an empty evidence string. Prompted by a 2026-09-11 interview finding: non-code-phase feedback was hardest to act on exactly where nothing was quoted or the quote was misleading.
   v4: Added `task_description` (the student-facing instructions, shown at the top of a Sandbox session) and an optional EARLIER PHASES block driven by `prior_artifacts`. The block is guarded by `{% if prior_artifacts %}`, so every existing caller — the notebook included — renders exactly what v3 rendered. Added one system-prompt rule covering it: prior-phase work is context, never evidence, since it is student writing and would otherwise be quotable.
   Also restored the v3/v2 changelog and the original `summary, inputs, outputs` field order, both lost in a Studio save that wrote an empty changelog field.
   v3: Added `label`/`order` (how the phase is presented in CLive Studio), `model.id` (the model was previously hardcoded in the notebook), and `artifact_fields` — the declaration of what the student submits for this phase. The STUDENT ARTIFACT block of the template now loops over `artifact_fields` instead of naming summary/inputs/outputs literally, so adding a field in the Studio flows into the prompt without a template edit.
@@ -102,7 +103,7 @@ user_template: |
   {% for f in artifact_fields %}
 
   {{ f.label }}:
-  {{ artifact[f.id] | default("(not provided)", true) }}
+  {{ artifact[f.id] | default("", true) }}
   {% endfor %}
 
   CRITERIA TO JUDGE

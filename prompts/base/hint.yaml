@@ -35,9 +35,14 @@
 #              string, which it does not yet.
 
 id: base.hint
-version: 1
+version: 2
 created: 2026-09-01
 changelog: >
+  v2: STUDENT ARTIFACT now renders a blank field as truly empty instead of the
+  literal string "(not provided)", which a hint could otherwise treat as real
+  content. See phase.problem_definition v5 for the full rationale -- the same
+  template pattern, the same fix.
+
   v1: First version. Picks one advisory criterion, states in one sentence why the
   student appears stuck, and nudges them toward that criterion without supplying
   any of the content it asks for.
@@ -135,7 +140,7 @@ user_template: |
   {% for f in artifact_fields %}
 
   {{ f.label }}:
-  {{ artifact[f.id] | default("(not provided)", true) }}
+  {{ artifact[f.id] | default("", true) }}
   {% endfor %}
   {% if history %}
 

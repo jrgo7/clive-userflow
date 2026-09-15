@@ -36,9 +36,14 @@
 #              single-shot one.
 
 id: base.nudge
-version: 1
+version: 2
 created: 2026-09-02
 changelog: >
+  v2: STUDENT ARTIFACT now renders a blank field as truly empty instead of the
+  literal string "(not provided)", which a nudge could otherwise treat as real
+  content. See phase.problem_definition v5 for the full rationale -- the same
+  template pattern, the same fix.
+
   v1: First version. Runs after a judge call that failed at least one gating criterion.
   Acknowledges every failing gate in one summary, picks exactly one for the student to
   fix first, says why that one, and nudges toward it without supplying its content.
@@ -145,7 +150,7 @@ user_template: |
   {% for f in artifact_fields %}
 
   {{ f.label }}:
-  {{ artifact[f.id] | default("(not provided)", true) }}
+  {{ artifact[f.id] | default("", true) }}
   {% endfor %}
   {% if history %}
 

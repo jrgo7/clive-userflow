@@ -8,6 +8,7 @@ reach it on a retry is only what a real student would have been looking at.
 
 from __future__ import annotations
 
+import re
 import types
 
 import pytest
@@ -345,9 +346,16 @@ def test_an_eager_persona_asks_before_writing_anything(stub):
                             max_attempts=1, phase_ids=[PHASE]))
     kinds = [e["type"] for e in evs]
     assert kinds.index("hint") < kinds.index("artifact"), "help must come before the writing"
-    # The hint ran against an empty artifact: the staring-at-a-blank-form case.
+    # The hint ran against an empty artifact: the staring-at-a-blank-form case. A blank
+    # field renders as nothing (not a placeholder string a judge could mistake for real
+    # writing), so this checks the artifact section directly rather than for a marker.
     hint_prompt = next(u for (n, u) in p.seen if n == "Hint")
-    assert "(not provided)" in hint_prompt
+    section = re.search(r"STUDENT ARTIFACT\n(.*?)\nCRITERIA", hint_prompt, re.S).group(1)
+    stripped = section.replace("This is what the student has written so far in this phase.", "")
+    for label in ("Summary:", "Inputs:", "Outputs:"):
+        assert label in stripped
+        stripped = stripped.replace(label, "")
+    assert stripped.strip() == "", f"expected every field blank, found: {stripped!r}"
 
 
 def test_a_never_persona_costs_no_hint_call(stub):

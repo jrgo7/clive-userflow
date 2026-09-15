@@ -1,10 +1,15 @@
 id: phase.algorithm_design
-version: 4
+version: 5
 phase: algorithm_design
 label: Design
 order: 3
 created: 2026-08-20
 changelog: >
+  v5: STUDENT ARTIFACT now renders a blank field as truly empty instead of the
+  literal string "(not provided)", which the judge could otherwise quote back as
+  `evidence` for a criterion the student left blank. See phase.problem_definition
+  v5 for the full rationale -- the same template pattern, the same fix.
+
   v4: Judge model moved from `deepseek-v4-pro` back to `deepseek-chat` (flash) to
   cut cost -- every judged phase now runs on flash. `max_output_tokens` lowered
   8000 -> 4000 to match `problem_definition` and `case_design`: flash runs no
@@ -122,7 +127,7 @@ user_template: |
   {% for f in artifact_fields %}
 
   {{ f.label }}:
-  {{ artifact[f.id] | default("(not provided)", true) }}
+  {{ artifact[f.id] | default("", true) }}
   {% endfor %}
 
   CRITERIA TO JUDGE

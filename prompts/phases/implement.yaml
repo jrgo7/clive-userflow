@@ -23,13 +23,20 @@
 #              of the student's code, because that is the artifact being judged.
 
 id: phase.implement
-version: 2
+version: 3
 phase: implement
 label: Implement
 order: 4
 gate: tests
 created: 2026-09-07
 changelog: >
+  v3: STUDENT ARTIFACT now renders a blank field as truly empty instead of the
+  literal string "(not provided)", which the judge could otherwise quote back as
+  `evidence`. Low-impact here -- the only field is `code`, and Submit only reaches
+  the judge once the compiler gate has already passed a non-empty program -- but
+  kept consistent with every other phase. See phase.problem_definition v5 for the
+  full rationale.
+
   v2: Judge model moved from `deepseek-v4-pro` to `deepseek-chat` (flash) to cut
   cost, matching every other phase. `max_output_tokens` lowered 8000 -> 4000. The
   criteria here are all advisory and the compiler has already settled correctness,
@@ -116,7 +123,7 @@ user_template: |
   {% for f in artifact_fields %}
 
   {{ f.label }}:
-  {{ artifact[f.id] | default("(not provided)", true) }}
+  {{ artifact[f.id] | default("", true) }}
   {% endfor %}
 
   CRITERIA TO JUDGE
