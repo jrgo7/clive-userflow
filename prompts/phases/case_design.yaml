@@ -24,15 +24,37 @@ task_description: |
 artifact_fields:
 - id: normal_cases
   label: Typical cases
-  hint: An ordinary input, the output you worked out, and how you got it.
+  hint: An ordinary input, the output you worked out, and how you got it — trace every line or value if the real output has more than one.
+  example: |-
+    Example, for a different problem —
+    Input: "level"
+    Output: "Yes"
+    How I got it: reading the word back to front still spells "level", so it matches.
+
+    Input: "hello"
+    Output: "No"
+    How I got it: reversed it spells "olleh", which does not match "hello".
   rows: 6
 - id: edge_cases
   label: Edge cases
   hint: Inputs at the boundaries — smallest, largest, zero, ties. Say what each one tests.
+  example: |-
+    Example —
+    Input: "a"
+    Output: "Yes"
+    How I got it: a single letter is trivially the same reversed, so it counts.
+
+    Input: "noon"
+    Output: "Yes"
+    How I got it: the longest case here, checking the comparison doesn't stop partway.
   rows: 6
 - id: reasoning
   label: Why these cases
   hint: What each case is meant to expose about the problem.
+  example: >-
+    Example — the typical cases confirm the ordinary comparison works both ways; the
+    edge cases check the smallest possible input and a longer one, to make sure the
+    check runs to completion instead of stopping early.
   rows: 4
 system_prompt: |
   You are evaluating one student artifact from one phase of a structured problem-solving process. You are not holding a conversation, and you are not teaching C.

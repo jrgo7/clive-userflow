@@ -437,7 +437,7 @@ function renderForm() {
       continue;
     }
     const ta = h("textarea", {
-      rows: f.rows || 4, "aria-label": f.label || f.id,
+      rows: f.rows || 4, "aria-label": f.label || f.id, placeholder: f.example || undefined,
       oninput: (e) => { st.artifact[f.id] = e.target.value; save(); syncGate(); },
     });
     ta.value = st.artifact[f.id] || "";

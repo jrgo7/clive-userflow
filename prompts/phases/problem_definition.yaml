@@ -49,14 +49,20 @@ artifact_fields:
 - id: summary
   label: Summary
   hint: Restate the task in your own words.
+  example: >-
+    Example, for a different problem — The program checks whether a single word reads
+    the same forwards and backwards. It reads one word and prints whether it is a
+    palindrome.
   rows: 4
 - id: inputs
   label: Inputs
   hint: What the program reads, of what type, and what the statement guarantees about it.
+  example: "Example — one word: a string of lowercase letters, 1 to 100 characters long, with no spaces"
   rows: 3
 - id: outputs
   label: Outputs
-  hint: What the program prints, and in what form.
+  hint: What the program prints, and in what form — one line or many, whatever the problem actually asks for.
+  example: 'Example — exactly "Yes" if the word is a palindrome, exactly "No" otherwise'
   rows: 3
 system_prompt: |
   You are evaluating one student artifact from one phase of a structured problem-solving process. You are not holding a conversation, and you are not teaching C.

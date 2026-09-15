@@ -53,15 +53,30 @@ task_description: |
 artifact_fields:
   - id: steps
     label: Algorithm steps
-    hint: Numbered steps, in plain language. Not C.
+    hint: Numbered steps, in plain language. Not C. A step can return a value from a function as easily as it can print one.
+    example: |-
+      Example, for a different problem —
+      1. Read the word the user typed.
+      2. Compare the first remaining letter to the last remaining letter.
+      3. If they differ, the word is not a palindrome — skip to step 6.
+      4. Move one letter in from each end and repeat step 2, until the two positions meet or cross.
+      5. If every pair matched, the word is a palindrome.
+      6. Print "Yes" if it is a palindrome, "No" otherwise.
     rows: 8
   - id: state
     label: What you keep track of
     hint: The values carried between steps — totals, counters, arrays — and what each holds.
+    example: >-
+      Example — two positions, one starting at the front of the word and one at the
+      back, both moving toward the middle; and a flag that starts true and turns false
+      the moment a pair of letters doesn't match.
     rows: 4
   - id: output_step
     label: Producing the output
-    hint: How the final answer is computed and printed, in the format the problem requires.
+    hint: How the final answer is produced, in the format the problem requires — printed directly, or returned from a function, whichever your solution actually does.
+    example: >-
+      Example — once the flag is settled, print "Yes" if it is still true or "No" if it
+      was set to false, exactly as the problem asks.
     rows: 3
 
 system_prompt: |
