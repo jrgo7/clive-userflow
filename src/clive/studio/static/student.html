@@ -530,13 +530,11 @@ function renderLedger(r) {
     if (!met && adv) {
       what.append(h("div", { class: "norule", text: "Not met — worth a look, but it did not hold you here." }));
     }
-    if (!met && v.evidence) {
-      what.append(h("blockquote", { text: v.evidence }));
-      if (!v.evidence_found) {
-        what.append(h("div", { class: "norule",
-          text: "This quote is not in what you wrote — worth reading the verdict sceptically." }));
-      }
-    }
+    // No evidence quote shown here: pointing at a specific span of the student's own
+    // writing as "what the judge blamed" read as an odd thing for the prototype to do,
+    // per review with the thesis adviser and a peer. The judge still returns evidence
+    // (audited against the artifact) and CLive Studio's author-facing preview surfaces
+    // still show it -- only the student page omits it now.
     card.append(h("div", { class: "row" }, [h("span", { class: `badge ${badge[0]}`, text: badge[1] }), what]));
   }
   if (r.missing_ids.length) {
